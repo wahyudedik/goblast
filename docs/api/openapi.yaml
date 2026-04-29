@@ -1,0 +1,616 @@
+openapi: 3.1.0
+info:
+  title: WA Automation API
+  description: |
+    API publik untuk integrasi WhatsApp Automation dengan sistem eksternal.
+
+    ## Autentikasi
+
+    Semua endpoint API memerlukan autentikasi menggunakan API Token. Token harus disertakan
+    dalam header `Authorization` dengan format Bearer token.
+
+    ```
+    Authorization: Bearer {your_api_token}
+    ```
+
+    API Token dapat dibuat melalui Dashboard di menu **API Tokens**. Token hanya ditampilkan
+    sekali saat pembuatan dan tidak dapat ditampilkan kembali.
+
+    ## Fitur API
+
+    Fitur API hanya tersedia untuk paket **Business**. Tenant dengan paket Starter atau Pro
+    akan menerima respons HTTP 403 saat mengakses endpoint API.
+
+    ## Rate Limiting
+
+    API dibatasi maksimum **60 permintaan per menit** per API Token. Jika batas terlampaui,
+    API akan mengembalikan respons HTTP 429 (Too Many Requests).
+
+    Header respons akan menyertakan informasi rate limit:
+    - `X-RateLimit-Limit`: Batas permintaan per menit
+    - `X-RateLimit-Remaining`: Sisa permintaan yang tersedia
+    - `X-RateLimit-Reset`: Waktu reset dalam Unix timestamp
+
+    ## Format Nomor Telepon
+
+    Semua nomor telepon harus menggunakan format internasional tanpa tanda plus (+) di awal:
+    - ✅ Benar: `6281234567890`
+    - ❌ Salah: `081234567890`, `+6281234567890`
+
+    ## Status Pengiriman Pesan
+
+    | Status | Deskripsi |
+    |--------|-----------|
+    | `pending` | Pesan sedang menunggu dalam antrian |
+    | `sent` | Pesan berhasil terkirim |
+    | `failed` | Pesan gagal terkirim setelah semua percobaan |
+    | `cancelled` | Pesan dibatalkan (kuota habis atau subscription expired) |
+    | `retrying` | Pesan sedang dicoba ulang |
+
+  version: 1.0.0
+  contact:
+    name: WA Automation Support
+    url: https://wa.me/6281529211963
+  license:
+    name: Proprietary
+
+servers:
+  - url: '{protocol}://{host}/api'
+    description: API Server
+    variables:
+      protocol:
+        enum:
+          - https
+          - http
+        default: https
+      host:
+        default: your-domain.com
+        description: Domain aplikasi WA Automation
+
+tags:
+  - name: Messages
+    description: Endpoint untuk pengiriman pesan WhatsApp
+  - name: Status
+    description: Endpoint untuk memeriksa status pengiriman
+  - name: Webhooks
+    description: Webhook untuk menerima pesan masuk dari Baileys Gateway
+
+security:
+  - BearerAuth: []
+
+paths:
+  /v1/send-message:
+    post:
+      tags:
+        - Messages
+      summary: Kirim Pesan Tunggal
+      description: |
+        Mengirim satu pesan WhatsApp ke nomor tujuan tertentu.
+
+        Pesan akan dimasukkan ke dalam antrian dan diproses secara asinkron.
+        Gunakan endpoint `/v1/message-status/{job_id}` untuk memeriksa status pengiriman.
+
+        **Catatan:**
+        - Device harus dalam status `connected`
+        - Kuota pesan harus tersedia
+        - Subscription harus aktif
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            examples:
+              with_message:
+                summary: Kirim dengan pesan langsung
+                value:
+                  device_id: 1
+                  to: "6281234567890"
+                  message: "Halo, ini adalah pesan test dari WA Automation."
+              with_template:
+                summary: Kirim dengan template
+                value:
+                  device_id: 1
+                  to: "6281234567890"
+                  template_id: 5
+              with_both:
+                summary: Kirim dengan template dan pesan fallback
+                value:
+                  device_id: 1
+                  to: "6281234567890"
+                  message: "Pesan fallback jika template tidak tersedia"
+                  template_id: 5
+      responses:
+        '202':
+          description: Pesan berhasil dimasukkan ke antrian
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+              example:
+                success: true
+                job_id: "550e8400-e29b-41d4-a716-446655440000"
+                status: "queued"
+                message: "Pesan telah dimasukkan ke antrian"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /v1/send-bulk:
+    post:
+      tags:
+        - Messages
+      summary: Kirim Pesan Massal (Broadcast)
+      description: |
+        Mengirim pesan WhatsApp ke banyak nomor tujuan sekaligus.
+
+        Pesan akan dimasukkan ke dalam antrian dan diproses secara bertahap dengan
+        jeda acak 5-10 detik antar pesan untuk mencegah pemblokiran nomor.
+
+        **Batasan:**
+        - Maksimal 10.000 nomor tujuan per broadcast
+        - Kuota pesan harus mencukupi untuk semua penerima
+        - Device harus dalam status `connected`
+
+        **Catatan:**
+        - Jika kuota tidak mencukupi, broadcast akan ditolak
+        - Gunakan `broadcast_id` untuk melacak progress broadcast
+      operationId: sendBulk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendBulkRequest'
+            examples:
+              basic:
+                summary: Broadcast dengan pesan langsung
+                value:
+                  device_id: 1
+                  recipients:
+                    - "6281234567890"
+                    - "6281234567891"
+                    - "6281234567892"
+                  message: "Halo, ini adalah pesan broadcast dari WA Automation."
+              with_template:
+                summary: Broadcast dengan template
+                value:
+                  device_id: 1
+                  recipients:
+                    - "6281234567890"
+                    - "6281234567891"
+                  template_id: 5
+      responses:
+        '202':
+          description: Broadcast berhasil dimasukkan ke antrian
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendBulkResponse'
+              example:
+                success: true
+                broadcast_id: 123
+                total_recipients: 3
+                status: "queued"
+                message: "Broadcast telah dimasukkan ke antrian"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /v1/message-status/{jobId}:
+    get:
+      tags:
+        - Status
+      summary: Cek Status Pesan
+      description: |
+        Memeriksa status pengiriman pesan berdasarkan `job_id` yang diterima
+        saat mengirim pesan.
+
+        **Status yang mungkin:**
+        - `pending`: Pesan sedang menunggu dalam antrian
+        - `sent`: Pesan berhasil terkirim
+        - `failed`: Pesan gagal terkirim
+        - `cancelled`: Pesan dibatalkan
+        - `retrying`: Pesan sedang dicoba ulang
+      operationId: getMessageStatus
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: ID job yang diterima saat mengirim pesan
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Status pesan berhasil ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageStatusResponse'
+              examples:
+                sent:
+                  summary: Pesan berhasil terkirim
+                  value:
+                    job_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "sent"
+                    recipient: "6281234567890"
+                    sent_at: "2026-04-29T10:30:00+07:00"
+                    failed_at: null
+                    error_message: null
+                    attempts: 1
+                    message: "Pesan berhasil terkirim"
+                pending:
+                  summary: Pesan dalam antrian
+                  value:
+                    job_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "pending"
+                    recipient: "6281234567890"
+                    sent_at: null
+                    failed_at: null
+                    error_message: null
+                    attempts: 0
+                    message: "Pesan sedang menunggu dalam antrian"
+                failed:
+                  summary: Pesan gagal terkirim
+                  value:
+                    job_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "failed"
+                    recipient: "6281234567890"
+                    sent_at: null
+                    failed_at: "2026-04-29T10:35:00+07:00"
+                    error_message: "Connection timeout to Baileys Gateway"
+                    attempts: 3
+                    message: "Pesan gagal terkirim"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Job tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not found"
+                message: "Job tidak ditemukan"
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Token
+      description: |
+        API Token yang dibuat melalui Dashboard.
+
+        Format: `Bearer {your_api_token}`
+
+  schemas:
+    SendMessageRequest:
+      type: object
+      required:
+        - device_id
+        - to
+      properties:
+        device_id:
+          type: integer
+          description: ID device yang akan digunakan untuk mengirim pesan
+          example: 1
+        to:
+          type: string
+          pattern: '^\+?\d{10,15}$'
+          description: |
+            Nomor telepon tujuan dalam format internasional.
+            Contoh: `6281234567890`
+          example: "6281234567890"
+        message:
+          type: string
+          maxLength: 4096
+          description: |
+            Isi pesan yang akan dikirim. Wajib diisi jika `template_id` tidak disertakan.
+          example: "Halo, ini adalah pesan test."
+        template_id:
+          type: integer
+          nullable: true
+          description: |
+            ID template yang akan digunakan. Jika disertakan, pesan akan dirender
+            dari template tersebut.
+          example: 5
+      oneOf:
+        - required: [message]
+        - required: [template_id]
+
+    SendBulkRequest:
+      type: object
+      required:
+        - device_id
+        - recipients
+      properties:
+        device_id:
+          type: integer
+          description: ID device yang akan digunakan untuk mengirim pesan
+          example: 1
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: string
+            pattern: '^\+?\d{10,15}$'
+          description: |
+            Daftar nomor telepon tujuan dalam format internasional.
+            Maksimal 10.000 nomor per broadcast.
+          example:
+            - "6281234567890"
+            - "6281234567891"
+            - "6281234567892"
+        message:
+          type: string
+          maxLength: 4096
+          description: |
+            Isi pesan yang akan dikirim. Wajib diisi jika `template_id` tidak disertakan.
+          example: "Halo, ini adalah pesan broadcast."
+        template_id:
+          type: integer
+          nullable: true
+          description: |
+            ID template yang akan digunakan. Jika disertakan, pesan akan dirender
+            dari template tersebut.
+          example: 5
+      oneOf:
+        - required: [message]
+        - required: [template_id]
+
+    SendMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indikator keberhasilan
+          example: true
+        job_id:
+          type: string
+          format: uuid
+          description: ID unik untuk melacak status pengiriman
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum: [queued]
+          description: Status awal pesan
+          example: "queued"
+        message:
+          type: string
+          description: Pesan konfirmasi
+          example: "Pesan telah dimasukkan ke antrian"
+
+    SendBulkResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indikator keberhasilan
+          example: true
+        broadcast_id:
+          type: integer
+          description: ID broadcast untuk melacak progress
+          example: 123
+        total_recipients:
+          type: integer
+          description: Jumlah total penerima
+          example: 3
+        status:
+          type: string
+          enum: [queued]
+          description: Status awal broadcast
+          example: "queued"
+        message:
+          type: string
+          description: Pesan konfirmasi
+          example: "Broadcast telah dimasukkan ke antrian"
+
+    MessageStatusResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: ID job
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum: [pending, sent, failed, cancelled, retrying]
+          description: Status pengiriman pesan
+          example: "sent"
+        recipient:
+          type: string
+          description: Nomor telepon penerima
+          example: "6281234567890"
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Waktu pesan berhasil terkirim (ISO 8601)
+          example: "2026-04-29T10:30:00+07:00"
+        failed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Waktu pesan gagal terkirim (ISO 8601)
+          example: null
+        error_message:
+          type: string
+          nullable: true
+          description: Pesan error jika gagal
+          example: null
+        attempts:
+          type: integer
+          description: Jumlah percobaan pengiriman
+          example: 1
+        message:
+          type: string
+          description: Deskripsi status dalam bahasa Indonesia
+          example: "Pesan berhasil terkirim"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Kode error
+          example: "Validation failed"
+        message:
+          type: string
+          description: Pesan error
+          example: "Token tidak valid atau tidak ditemukan"
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Kode error
+          example: "Validation failed"
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Detail error per field
+          example:
+            to:
+              - "Format nomor telepon tidak valid. Gunakan format internasional (contoh: 6281234567890)."
+            device_id:
+              - "Device tidak ditemukan."
+
+    QuotaExceededResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Quota exceeded"
+        message:
+          type: string
+          example: "Kuota pesan telah habis. Sisa kuota: 0"
+
+  responses:
+    Unauthorized:
+      description: Token tidak valid atau tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+            message: "Token tidak valid atau tidak ditemukan"
+
+    Forbidden:
+      description: Akses ditolak (fitur tidak tersedia di paket langganan)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            no_subscription:
+              summary: Tidak ada langganan aktif
+              value:
+                error: "Forbidden"
+                message: "Tidak ada langganan aktif. Silakan berlangganan terlebih dahulu."
+            feature_not_allowed:
+              summary: Fitur tidak tersedia di paket
+              value:
+                error: "Forbidden"
+                message: "Fitur API hanya tersedia untuk paket Business."
+
+    ValidationError:
+      description: Validasi gagal
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationErrorResponse'
+              - $ref: '#/components/schemas/QuotaExceededResponse'
+          examples:
+            validation_failed:
+              summary: Error validasi field
+              value:
+                error: "Validation failed"
+                errors:
+                  to:
+                    - "Format nomor telepon tidak valid. Gunakan format internasional (contoh: 6281234567890)."
+            device_not_found:
+              summary: Device tidak ditemukan
+              value:
+                error: "Validation failed"
+                errors:
+                  device_id:
+                    - "Device tidak ditemukan atau bukan milik tenant Anda."
+            device_not_connected:
+              summary: Device tidak terhubung
+              value:
+                error: "Validation failed"
+                errors:
+                  device_id:
+                    - "Device tidak dalam status terhubung. Status saat ini: disconnected"
+            template_not_found:
+              summary: Template tidak ditemukan
+              value:
+                error: "Validation failed"
+                errors:
+                  template_id:
+                    - "Template tidak ditemukan atau bukan milik tenant Anda."
+            quota_exceeded:
+              summary: Kuota habis
+              value:
+                error: "Quota exceeded"
+                message: "Kuota pesan telah habis. Sisa kuota: 0"
+            quota_insufficient:
+              summary: Kuota tidak mencukupi (bulk)
+              value:
+                error: "Quota exceeded"
+                message: "Kuota pesan tidak mencukupi. Sisa kuota: 50, dibutuhkan: 100"
+
+    TooManyRequests:
+      description: Rate limit terlampaui
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Batas permintaan per menit
+          example: 60
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Sisa permintaan yang tersedia
+          example: 0
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Waktu reset dalam Unix timestamp
+          example: 1714380000
+        Retry-After:
+          schema:
+            type: integer
+          description: Waktu tunggu dalam detik sebelum mencoba lagi
+          example: 30
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Too Many Requests"
+            message: "Rate limit terlampaui. Silakan coba lagi dalam 30 detik."
