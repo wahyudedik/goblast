@@ -1,587 +1,286 @@
-# GoBlast Deployment Guide
+# Deployment Guide — aaPanel + VPS
 
-Panduan lengkap untuk deploy GoBlast WhatsApp Automation Platform ke production environment.
-
----
-
-## Table of Contents
-
-1. [System Requirements](#system-requirements)
-2. [Server Preparation](#server-preparation)
-3. [Laravel Application Setup](#laravel-application-setup)
-4. [Database Setup](#database-setup)
-5. [Queue Worker Setup](#queue-worker-setup)
-6. [Scheduler Setup](#scheduler-setup)
-7. [Baileys Gateway Setup](#baileys-gateway-setup)
-8. [SSL/TLS Configuration](#ssltls-configuration)
-9. [Nginx Configuration](#nginx-configuration)
-10. [Process Management](#process-management)
-11. [Monitoring & Logging](#monitoring--logging)
-12. [Security Hardening](#security-hardening)
-13. [Backup & Recovery](#backup--recovery)
-14. [Troubleshooting](#troubleshooting)
+Panduan step-by-step deploy Konektivitas (GoBlast) ke production menggunakan aaPanel di VPS.
 
 ---
 
-## System Requirements
+## Persyaratan Server
 
-### Minimum Hardware
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | 2 cores | 4+ cores |
-| RAM | 4 GB | 8+ GB |
-| Storage | 40 GB SSD | 100+ GB SSD |
-| Network | 100 Mbps | 1 Gbps |
-
-### Software Requirements
-
-| Software | Version | Purpose |
-|----------|---------|---------|
-| Ubuntu | 22.04 LTS / 24.04 LTS | Operating System |
-| PHP | 8.4+ | Laravel Runtime |
-| MySQL | 8.0+ | Database |
-| Node.js | 18+ | Baileys Gateway |
-| Nginx | 1.18+ | Web Server |
-| Composer | 2.x | PHP Dependencies |
-| npm | 9+ | Node.js Dependencies |
-| Supervisor | 4.x | Process Management |
-| Certbot | Latest | SSL Certificates |
+| Komponen | Minimum |
+|----------|---------|
+| OS | Ubuntu 22.04 / 24.04 LTS |
+| RAM | 2 GB (4 GB recommended) |
+| CPU | 2 vCPU |
+| Storage | 20 GB SSD |
+| Node.js | 18+ |
+| PHP | 8.4 |
+| MySQL | 8.0 |
 
 ---
 
-## Server Preparation
+## Step 1: Install aaPanel
 
-### 1. Update System
+SSH ke server, lalu jalankan:
 
 ```bash
-sudo apt update && sudo apt upgrade -y
+wget -O install.sh https://www.aapanel.com/script/install_7.0_en.sh && bash install.sh aapanel
 ```
 
-### 2. Install Required Packages
+Setelah selesai, catat URL panel, username, dan password yang muncul.
 
-```bash
-# Essential tools
-sudo apt install -y curl wget git unzip software-properties-common
-
-# Add PHP repository
-sudo add-apt-repository ppa:ondrej/php -y
-sudo apt update
-
-# Install PHP 8.4 and extensions
-sudo apt install -y php8.4-fpm php8.4-cli php8.4-mysql php8.4-mbstring \
-    php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath php8.4-gd \
-    php8.4-intl php8.4-redis php8.4-opcache
-
-# Install MySQL
-sudo apt install -y mysql-server
-
-# Install Nginx
-sudo apt install -y nginx
-
-# Install Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install Composer
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
-
-# Install Supervisor
-sudo apt install -y supervisor
-
-# Install Certbot for SSL
-sudo apt install -y certbot python3-certbot-nginx
-```
-
-### 3. Create Application User
-
-```bash
-# Create dedicated user for the application
-sudo useradd -m -s /bin/bash goblast
-sudo usermod -aG www-data goblast
-
-# Create application directory
-sudo mkdir -p /var/www/goblast
-sudo chown goblast:www-data /var/www/goblast
-```
+Login ke aaPanel via browser, lalu install **LNMP Stack**:
+- Nginx (latest)
+- MySQL 8.0
+- PHP 8.4
+- phpMyAdmin
 
 ---
 
-## Laravel Application Setup
+## Step 2: Konfigurasi PHP
 
-### 1. Clone Repository
+Di aaPanel → **App Store** → **PHP 8.4** → **Settings** → **Install Extensions**:
+
+Install extension berikut:
+- `fileinfo`
+- `redis` (opsional, untuk cache/queue)
+- `opcache`
+- `bcmath`
+- `mbstring`
+- `xml`
+- `curl`
+- `zip`
+- `gd`
+- `intl`
+- `pcntl` (penting untuk queue worker)
+
+Lalu di tab **Disabled Functions**, hapus fungsi berikut dari daftar disabled:
+- `putenv`
+- `proc_open`
+- `pcntl_signal`
+- `pcntl_alarm`
+- `pcntl_async_signals`
+
+---
+
+## Step 3: Buat Database
+
+Di aaPanel → **Database** → **Add Database**:
+
+| Field | Value |
+|-------|-------|
+| Database Name | `konektivitas` |
+| Username | `konektivitas` |
+| Password | (generate password kuat) |
+| Encoding | `utf8mb4` |
+
+Catat credentials ini untuk `.env`.
+
+---
+
+## Step 4: Buat Website
+
+Di aaPanel → **Website** → **Add Site**:
+
+| Field | Value |
+|-------|-------|
+| Domain | `konektivitas.com` |
+| PHP Version | PHP 8.4 |
+| Database | Tidak perlu (sudah dibuat) |
+
+Setelah dibuat, klik domain → **SSL** → **Let's Encrypt** → centang domain → **Apply**.
+
+---
+
+## Step 5: Upload Project
+
+### Opsi A: Git Clone (Recommended)
+
+SSH ke server:
 
 ```bash
-sudo -u goblast -i
-cd /var/www/goblast
+cd /www/wwwroot/konektivitas.com
+rm -rf ./* ./.*  # Hapus file default aaPanel
 
 git clone <repository-url> .
 ```
 
-### 2. Install Dependencies
+### Opsi B: Upload ZIP
+
+Upload file project via aaPanel File Manager ke `/www/wwwroot/konektivitas.com/`, lalu extract.
+
+---
+
+## Step 6: Install Dependencies
 
 ```bash
-# PHP dependencies (production)
+cd /www/wwwroot/konektivitas.com
+
+# Install PHP dependencies
 composer install --no-dev --optimize-autoloader
 
-# Node.js dependencies and build assets
-npm ci
+# Install Node.js dependencies & build assets
+npm install
 npm run build
+
+# Install gateway dependencies
+cd gateway
+npm install --production
+cd ..
 ```
 
-### 3. Environment Configuration
+---
+
+## Step 7: Konfigurasi Laravel
 
 ```bash
+cd /www/wwwroot/konektivitas.com
+
+# Copy environment file
 cp .env.example .env
+
+# Generate app key
 php artisan key:generate
 ```
 
-Edit `.env` dengan konfigurasi production:
+Edit `.env`:
 
 ```env
-# Application
-APP_NAME="GoBlast"
+APP_NAME="Konektivitas"
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://yourdomain.com
+APP_URL=https://konektivitas.com
 
-# Timezone
-APP_TIMEZONE=Asia/Jakarta
-
-# Database
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=goblast
-DB_USERNAME=goblast_user
-DB_PASSWORD=your_secure_password_here
+DB_DATABASE=konektivitas
+DB_USERNAME=konektivitas
+DB_PASSWORD=PASSWORD_DARI_STEP_3
 
-# Session & Cache
 SESSION_DRIVER=database
-CACHE_STORE=database
 QUEUE_CONNECTION=database
-
-# Mail (SMTP)
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.yourmailprovider.com
-MAIL_PORT=587
-MAIL_USERNAME=your_smtp_username
-MAIL_PASSWORD=your_smtp_password
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS="noreply@yourdomain.com"
-MAIL_FROM_NAME="${APP_NAME}"
+CACHE_STORE=database
 
 # Baileys Gateway
 BAILEYS_GATEWAY_URL=http://127.0.0.1:3000
-BAILEYS_WEBHOOK_SECRET=generate_a_strong_random_secret_here
+BAILEYS_WEBHOOK_SECRET=GENERATE_RANDOM_STRING_64_CHAR
 
-# WA Automation Settings
-WA_AUTOMATION_TRIAL_DURATION_DAYS=14
-WA_AUTOMATION_LOG_RETENTION_DAYS=90
-WA_AUTOMATION_SYSTEM_LOG_RETENTION_DAYS=180
-WA_AUTOMATION_DEFAULT_RATE_LIMIT_PER_HOUR=200
-WA_AUTOMATION_DEFAULT_DELAY_MIN_SECONDS=5
-WA_AUTOMATION_DEFAULT_DELAY_MAX_SECONDS=10
+# Mail (gunakan SMTP provider seperti Mailtrap, Mailgun, dll)
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailgun.org
+MAIL_PORT=587
+MAIL_USERNAME=your-smtp-username
+MAIL_PASSWORD=your-smtp-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="info@konektivitas.com"
+MAIL_FROM_NAME="Konektivitas"
 ```
 
-### 4. Generate Webhook Secret
+Generate webhook secret yang kuat:
 
 ```bash
-# Generate a secure random secret
-openssl rand -hex 32
+php artisan tinker --execute "echo bin2hex(random_bytes(32));"
 ```
 
-Gunakan output ini untuk `BAILEYS_WEBHOOK_SECRET` di Laravel dan `WEBHOOK_SECRET` di Gateway.
+Gunakan output-nya untuk `BAILEYS_WEBHOOK_SECRET`.
 
-### 5. Set Permissions
+---
+
+## Step 8: Setup Database & Seeder
 
 ```bash
-# Storage and cache directories
-sudo chown -R goblast:www-data /var/www/goblast/storage
-sudo chown -R goblast:www-data /var/www/goblast/bootstrap/cache
+cd /www/wwwroot/konektivitas.com
 
-sudo chmod -R 775 /var/www/goblast/storage
-sudo chmod -R 775 /var/www/goblast/bootstrap/cache
+php artisan migrate --force
+php artisan db:seed --force
 ```
 
-### 6. Optimize for Production
+---
+
+## Step 9: Optimize Laravel
 
 ```bash
-# Cache configuration
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan event:cache
-
-# Create storage link
-php artisan storage:link
+php artisan optimize
 ```
 
 ---
 
-## Database Setup
-
-### 1. Secure MySQL Installation
+## Step 10: Set Permissions
 
 ```bash
-sudo mysql_secure_installation
-```
+cd /www/wwwroot/konektivitas.com
 
-### 2. Create Database and User
+# Set ownership
+chown -R www:www .
 
-```bash
-sudo mysql -u root -p
-```
+# Set directory permissions
+find . -type d -exec chmod 755 {} \;
+find . -type f -exec chmod 644 {} \;
 
-```sql
--- Create database
-CREATE DATABASE goblast CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- Create user
-CREATE USER 'goblast_user'@'localhost' IDENTIFIED BY 'your_secure_password_here';
-
--- Grant privileges
-GRANT ALL PRIVILEGES ON goblast.* TO 'goblast_user'@'localhost';
-FLUSH PRIVILEGES;
-
-EXIT;
-```
-
-### 3. Run Migrations
-
-```bash
-cd /var/www/goblast
-php artisan migrate --force
-```
-
-### 4. Seed Initial Data
-
-```bash
-# Seed default plans and system configs
-php artisan db:seed --class=PlanSeeder --force
-php artisan db:seed --class=SystemConfigSeeder --force
-
-# Optional: Create superadmin user
-php artisan tinker --execute "
-\App\Models\User::create([
-    'name' => 'Super Admin',
-    'email' => 'admin@yourdomain.com',
-    'password' => bcrypt('your_secure_password'),
-    'role' => 'superadmin',
-    'email_verified_at' => now(),
-]);
-"
-```
-
-### 5. MySQL Performance Tuning
-
-Edit `/etc/mysql/mysql.conf.d/mysqld.cnf`:
-
-```ini
-[mysqld]
-# InnoDB Settings
-innodb_buffer_pool_size = 1G
-innodb_log_file_size = 256M
-innodb_flush_log_at_trx_commit = 2
-innodb_flush_method = O_DIRECT
-
-# Query Cache (disabled in MySQL 8.0+)
-# Use application-level caching instead
-
-# Connection Settings
-max_connections = 200
-wait_timeout = 600
-interactive_timeout = 600
-
-# Logging
-slow_query_log = 1
-slow_query_log_file = /var/log/mysql/slow.log
-long_query_time = 2
-```
-
-Restart MySQL:
-
-```bash
-sudo systemctl restart mysql
+# Writable directories
+chmod -R 775 storage
+chmod -R 775 bootstrap/cache
 ```
 
 ---
 
-## Queue Worker Setup
+## Step 11: Konfigurasi Nginx
 
-GoBlast menggunakan Laravel Queue untuk memproses pengiriman pesan secara asinkron.
+Di aaPanel → **Website** → klik domain → **Config** (Nginx config).
 
-### 1. Create Supervisor Configuration
-
-```bash
-sudo nano /etc/supervisor/conf.d/goblast-worker.conf
-```
-
-```ini
-[program:goblast-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/goblast/artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --memory=128
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-user=goblast
-numprocs=4
-redirect_stderr=true
-stdout_logfile=/var/www/goblast/storage/logs/worker.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=5
-stopwaitsecs=3600
-```
-
-**Penjelasan parameter:**
-- `numprocs=4`: Jalankan 4 worker processes (sesuaikan dengan CPU cores)
-- `--sleep=3`: Tunggu 3 detik jika tidak ada job
-- `--tries=3`: Retry job maksimal 3 kali
-- `--max-time=3600`: Restart worker setiap 1 jam untuk mencegah memory leak
-- `--memory=128`: Restart jika memory melebihi 128MB
-
-### 2. Start Queue Workers
-
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start goblast-worker:*
-```
-
-### 3. Monitor Queue Workers
-
-```bash
-# Check status
-sudo supervisorctl status goblast-worker:*
-
-# View logs
-tail -f /var/www/goblast/storage/logs/worker.log
-
-# Restart workers (after code deployment)
-sudo supervisorctl restart goblast-worker:*
-```
-
-### 4. Queue Monitoring Dashboard
-
-Untuk monitoring queue via web, gunakan Laravel Horizon (opsional) atau cek via artisan:
-
-```bash
-# Monitor queue status
-php artisan queue:monitor database:default
-
-# List failed jobs
-php artisan queue:failed
-
-# Retry failed jobs
-php artisan queue:retry all
-```
-
----
-
-## Scheduler Setup
-
-Laravel Scheduler menjalankan tugas terjadwal seperti reminder, cleanup, dan health check.
-
-### Scheduled Tasks
-
-| Command | Schedule | Description |
-|---------|----------|-------------|
-| `reminder:process` | Every minute | Process scheduled reminders |
-| `device:health-check` | Every minute | Check device connection status |
-| `broadcast:dispatch-scheduled` | Every minute | Dispatch scheduled broadcasts |
-| `alert:check` | Every 5 minutes | Check system alerts |
-| `subscription:check-expiry` | Daily 08:00 WIB | Check subscription expiry |
-| `trial:check-expiry` | Daily 08:00 WIB | Check trial expiry |
-| `log:cleanup` | Weekly Sunday 02:00 WIB | Cleanup old logs |
-
-### 1. Setup Cron Job
-
-```bash
-sudo crontab -u goblast -e
-```
-
-Add this line:
-
-```cron
-* * * * * cd /var/www/goblast && php artisan schedule:run >> /dev/null 2>&1
-```
-
-### 2. Verify Scheduler
-
-```bash
-# List scheduled tasks
-php artisan schedule:list
-
-# Run scheduler manually (for testing)
-php artisan schedule:run
-
-# Check scheduler logs
-tail -f /var/www/goblast/storage/logs/laravel.log
-```
-
----
-
-## Baileys Gateway Setup
-
-Baileys Gateway adalah service Node.js yang menangani koneksi WhatsApp.
-
-### 1. Setup Gateway Directory
-
-```bash
-cd /var/www/goblast/gateway
-npm ci --production
-```
-
-### 2. Configure Gateway Environment
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-```env
-# Gateway Server
-PORT=3000
-HOST=127.0.0.1
-
-# Laravel Webhook
-WEBHOOK_URL=https://yourdomain.com/api/webhooks/baileys
-WEBHOOK_SECRET=same_secret_as_laravel_baileys_webhook_secret
-
-# Session Storage
-SESSION_PATH=./sessions
-
-# Logging
-LOG_LEVEL=info
-
-# Message Delay (ms)
-MESSAGE_DELAY_MIN=3000
-MESSAGE_DELAY_MAX=7000
-```
-
-> **PENTING:** `WEBHOOK_SECRET` harus sama persis dengan `BAILEYS_WEBHOOK_SECRET` di Laravel `.env`
-
-### 3. Create Supervisor Configuration
-
-```bash
-sudo nano /etc/supervisor/conf.d/goblast-gateway.conf
-```
-
-```ini
-[program:goblast-gateway]
-command=/usr/bin/node /var/www/goblast/gateway/src/index.js
-directory=/var/www/goblast/gateway
-autostart=true
-autorestart=true
-user=goblast
-redirect_stderr=true
-stdout_logfile=/var/www/goblast/storage/logs/gateway.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=5
-environment=NODE_ENV="production"
-```
-
-### 4. Start Gateway
-
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start goblast-gateway
-```
-
-### 5. Verify Gateway
-
-```bash
-# Check status
-sudo supervisorctl status goblast-gateway
-
-# Test health endpoint
-curl http://127.0.0.1:3000/health
-
-# View logs
-tail -f /var/www/goblast/storage/logs/gateway.log
-```
-
-### 6. Session Persistence
-
-Sessions WhatsApp disimpan di `/var/www/goblast/gateway/sessions/`. Pastikan folder ini:
-- Di-backup secara regular
-- Tidak dihapus saat deployment
-- Memiliki permission yang benar
-
-```bash
-sudo chown -R goblast:goblast /var/www/goblast/gateway/sessions
-sudo chmod -R 755 /var/www/goblast/gateway/sessions
-```
-
----
-
-## SSL/TLS Configuration
-
-### 1. Obtain SSL Certificate with Certbot
-
-```bash
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-```
-
-### 2. Auto-Renewal
-
-Certbot automatically sets up renewal. Verify:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-### 3. SSL Configuration Best Practices
-
-Certbot akan mengkonfigurasi Nginx secara otomatis. Untuk keamanan tambahan, edit `/etc/nginx/sites-available/goblast`:
-
-```nginx
-# SSL Configuration
-ssl_protocols TLSv1.2 TLSv1.3;
-ssl_prefer_server_ciphers on;
-ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-ssl_session_cache shared:SSL:10m;
-ssl_session_timeout 1d;
-ssl_session_tickets off;
-
-# HSTS
-add_header Strict-Transport-Security "max-age=63072000" always;
-```
-
----
-
-## Nginx Configuration
-
-### 1. Create Nginx Site Configuration
-
-```bash
-sudo nano /etc/nginx/sites-available/goblast
-```
+Ganti isi config dengan:
 
 ```nginx
 server {
     listen 80;
-    listen [::]:80;
-    server_name yourdomain.com www.yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
     listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name yourdomain.com www.yourdomain.com;
+    server_name konektivitas.com www.konektivitas.com;
 
-    root /var/www/goblast/public;
+    root /www/wwwroot/konektivitas.com/public;
     index index.php;
 
-    # SSL certificates (managed by Certbot)
-    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    # SSL (dikelola aaPanel)
+    # ssl_certificate    /path/to/cert.pem;
+    # ssl_certificate_key /path/to/key.pem;
+
+    # Redirect HTTP to HTTPS
+    if ($scheme = http) {
+        return 301 https://$host$request_uri;
+    }
+
+    # Redirect www to non-www
+    if ($host = www.konektivitas.com) {
+        return 301 https://konektivitas.com$request_uri;
+    }
+
+    # Laravel
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # PHP
+    location ~ \.php$ {
+        fastcgi_pass unix:/tmp/php-cgi-84.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+
+    # Proxy Baileys Gateway WebSocket (untuk QR code scan)
+    location /gateway/ {
+        proxy_pass http://127.0.0.1:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -589,546 +288,293 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_proxied any;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml;
-
-    # Client body size (for CSV uploads)
-    client_max_body_size 10M;
-
-    # Logging
-    access_log /var/log/nginx/goblast_access.log;
-    error_log /var/log/nginx/goblast_error.log;
-
-    # Laravel routing
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    # PHP-FPM
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-    }
-
-    # Deny access to sensitive files
-    location ~ /\.(?!well-known).* {
+    # Deny access to hidden files
+    location ~ /\. {
         deny all;
     }
 
-    location ~ ^/(\.env|composer\.(json|lock)|package(-lock)?\.json|artisan) {
-        deny all;
-    }
-
-    # Static files caching
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg)$ {
+    # Cache static assets
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
+
+    access_log /www/wwwlogs/konektivitas.com.log;
+    error_log /www/wwwlogs/konektivitas.com.error.log;
 }
 ```
 
-### 2. Enable Site
+> **Catatan:** Jangan hapus baris SSL yang di-generate aaPanel. Sesuaikan path `fastcgi_pass` dengan versi PHP yang terinstall.
+
+Restart Nginx setelah edit config.
+
+---
+
+## Step 12: Setup Baileys Gateway
+
+### Konfigurasi Gateway
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/goblast /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
+cd /www/wwwroot/konektivitas.com/gateway
+cp .env.example .env
 ```
 
-### 3. PHP-FPM Configuration
+Edit `gateway/.env`:
 
-Edit `/etc/php/8.4/fpm/pool.d/www.conf`:
+```env
+PORT=3000
+HOST=127.0.0.1
+
+WEBHOOK_URL=https://konektivitas.com/webhook/baileys
+WEBHOOK_SECRET=SAMA_DENGAN_BAILEYS_WEBHOOK_SECRET_DI_LARAVEL
+
+SESSION_PATH=./sessions
+LOG_LEVEL=info
+
+MESSAGE_DELAY_MIN=3000
+MESSAGE_DELAY_MAX=7000
+```
+
+### Jalankan dengan PM2
+
+Install PM2 secara global:
+
+```bash
+npm install -g pm2
+```
+
+Start gateway:
+
+```bash
+cd /www/wwwroot/konektivitas.com/gateway
+pm2 start src/index.js --name "konektivitas-gateway"
+pm2 save
+pm2 startup
+```
+
+Verifikasi:
+
+```bash
+pm2 status
+curl http://127.0.0.1:3000/health
+```
+
+---
+
+## Step 13: Setup Queue Worker dengan Supervisor
+
+### Install Supervisor
+
+```bash
+apt install supervisor -y
+```
+
+### Buat Config
+
+```bash
+nano /etc/supervisor/conf.d/konektivitas-worker.conf
+```
+
+Isi:
 
 ```ini
-[www]
-user = goblast
-group = www-data
-listen = /var/run/php/php8.4-fpm.sock
-listen.owner = www-data
-listen.group = www-data
-
-pm = dynamic
-pm.max_children = 50
-pm.start_servers = 5
-pm.min_spare_servers = 5
-pm.max_spare_servers = 35
-pm.max_requests = 500
-
-php_admin_value[memory_limit] = 256M
-php_admin_value[upload_max_filesize] = 10M
-php_admin_value[post_max_size] = 10M
-php_admin_value[max_execution_time] = 60
+[program:konektivitas-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /www/wwwroot/konektivitas.com/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/www/wwwroot/konektivitas.com/storage/logs/worker.log
+stopwaitsecs=3600
 ```
 
-Restart PHP-FPM:
+### Aktifkan
 
 ```bash
-sudo systemctl restart php8.4-fpm
+supervisorctl reread
+supervisorctl update
+supervisorctl start konektivitas-worker:*
+```
+
+Verifikasi:
+
+```bash
+supervisorctl status
 ```
 
 ---
 
-## Process Management
+## Step 14: Setup Cron Job (Scheduler)
 
-### Supervisor Commands
+Di aaPanel → **Cron** → **Add Cron Job**:
 
-```bash
-# View all processes
-sudo supervisorctl status
+| Field | Value |
+|-------|-------|
+| Type | Shell Script |
+| Name | Laravel Scheduler |
+| Cycle | Every 1 minute |
+| Script | `cd /www/wwwroot/konektivitas.com && php artisan schedule:run >> /dev/null 2>&1` |
 
-# Start all GoBlast processes
-sudo supervisorctl start goblast-worker:*
-sudo supervisorctl start goblast-gateway
-
-# Stop all GoBlast processes
-sudo supervisorctl stop goblast-worker:*
-sudo supervisorctl stop goblast-gateway
-
-# Restart after deployment
-sudo supervisorctl restart goblast-worker:*
-sudo supervisorctl restart goblast-gateway
-
-# Reload configuration
-sudo supervisorctl reread
-sudo supervisorctl update
-```
-
-### Systemd Services Status
+Atau via SSH:
 
 ```bash
-# Check all services
-sudo systemctl status nginx
-sudo systemctl status php8.4-fpm
-sudo systemctl status mysql
-sudo systemctl status supervisor
+crontab -e
 ```
+
+Tambahkan:
+
+```
+* * * * * cd /www/wwwroot/konektivitas.com && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Scheduler menjalankan:
+- Reminder processing (setiap menit)
+- Broadcast dispatch (setiap menit)
+- Device health check (setiap menit)
+- Alert check (setiap 5 menit)
+- Subscription expiry check (harian 08:00 WIB)
+- Trial expiry check (harian 08:00 WIB)
+- Log cleanup (mingguan)
 
 ---
 
-## Monitoring & Logging
+## Step 15: Verifikasi Deployment
 
-### 1. Application Logs
+### Checklist
+
+```bash
+cd /www/wwwroot/konektivitas.com
+
+# 1. Cek Laravel
+php artisan about
+
+# 2. Cek database connection
+php artisan db:monitor
+
+# 3. Cek queue
+php artisan queue:monitor
+
+# 4. Cek gateway
+curl http://127.0.0.1:3000/health
+
+# 5. Cek scheduler
+php artisan schedule:list
+
+# 6. Cek supervisor
+supervisorctl status
+
+# 7. Cek PM2
+pm2 status
+```
+
+### Test di Browser
+
+1. Buka `https://konektivitas.com` — landing page harus muncul
+2. Login dengan superadmin: `info@konektivitas.com` / `Wahyu123456789@`
+3. Cek admin dashboard di `/admin`
+4. Login dengan demo tenant: `admin@demo.test` / `password`
+5. Coba tambah device dan scan QR code
+
+---
+
+## Maintenance
+
+### Update Aplikasi
+
+```bash
+cd /www/wwwroot/konektivitas.com
+
+# Pull latest code
+git pull origin main
+
+# Install dependencies
+composer install --no-dev --optimize-autoloader
+npm install && npm run build
+
+# Run migrations
+php artisan migrate --force
+
+# Clear & rebuild cache
+php artisan optimize:clear
+php artisan optimize
+
+# Restart services
+supervisorctl restart konektivitas-worker:*
+pm2 restart konektivitas-gateway
+```
+
+### Monitoring
 
 ```bash
 # Laravel logs
-tail -f /var/www/goblast/storage/logs/laravel.log
+tail -f /www/wwwroot/konektivitas.com/storage/logs/laravel.log
 
 # Queue worker logs
-tail -f /var/www/goblast/storage/logs/worker.log
+tail -f /www/wwwroot/konektivitas.com/storage/logs/worker.log
 
 # Gateway logs
-tail -f /var/www/goblast/storage/logs/gateway.log
+pm2 logs konektivitas-gateway
+
+# Nginx logs
+tail -f /www/wwwlogs/konektivitas.com.error.log
 ```
 
-### 2. System Logs
+### Backup Database
+
+Di aaPanel → **Database** → klik database → **Backup**.
+
+Atau via CLI:
 
 ```bash
-# Nginx access logs
-tail -f /var/log/nginx/goblast_access.log
-
-# Nginx error logs
-tail -f /var/log/nginx/goblast_error.log
-
-# MySQL slow query logs
-tail -f /var/log/mysql/slow.log
-
-# Supervisor logs
-tail -f /var/log/supervisor/supervisord.log
-```
-
-### 3. Log Rotation
-
-Create `/etc/logrotate.d/goblast`:
-
-```
-/var/www/goblast/storage/logs/*.log {
-    daily
-    missingok
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 goblast www-data
-    sharedscripts
-    postrotate
-        /usr/bin/supervisorctl restart goblast-worker:* > /dev/null 2>&1 || true
-    endscript
-}
-```
-
-### 4. Health Monitoring
-
-#### Internal Health Checks
-
-GoBlast memiliki built-in health checks:
-
-```bash
-# Device health check (runs every minute via scheduler)
-php artisan device:health-check
-
-# Alert check (runs every 5 minutes via scheduler)
-php artisan alert:check
-```
-
-#### External Monitoring (Recommended)
-
-Setup monitoring dengan tools seperti:
-
-- **UptimeRobot** atau **Pingdom**: Monitor URL availability
-- **Netdata** atau **Prometheus + Grafana**: System metrics
-- **Sentry** atau **Bugsnag**: Error tracking
-
-#### Simple Health Check Endpoint
-
-Buat endpoint untuk external monitoring:
-
-```bash
-# Test Laravel health
-curl -s https://yourdomain.com/up
-
-# Test Gateway health
-curl -s http://127.0.0.1:3000/health
-```
-
-### 5. Alert Notifications
-
-GoBlast mengirim alert ke Superadmin untuk:
-- Gateway down (tidak merespons > 5 menit)
-- Quota usage > 90%
-- Failed jobs spike (> 50 dalam 1 jam)
-- Subscription expiring
-
-Pastikan konfigurasi email sudah benar di `.env`.
-
----
-
-## Security Hardening
-
-### 1. Firewall Configuration
-
-```bash
-# Install UFW
-sudo apt install -y ufw
-
-# Default policies
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-
-# Allow SSH
-sudo ufw allow ssh
-
-# Allow HTTP/HTTPS
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Enable firewall
-sudo ufw enable
-```
-
-> **Note:** Gateway port 3000 tidak perlu dibuka karena hanya diakses dari localhost.
-
-### 2. Fail2Ban
-
-```bash
-sudo apt install -y fail2ban
-
-# Create jail configuration
-sudo nano /etc/fail2ban/jail.local
-```
-
-```ini
-[DEFAULT]
-bantime = 3600
-findtime = 600
-maxretry = 5
-
-[sshd]
-enabled = true
-
-[nginx-http-auth]
-enabled = true
-
-[nginx-limit-req]
-enabled = true
-```
-
-```bash
-sudo systemctl restart fail2ban
-```
-
-### 3. Application Security Checklist
-
-- [ ] `APP_DEBUG=false` di production
-- [ ] `APP_ENV=production`
-- [ ] Strong `APP_KEY` (generated)
-- [ ] Strong `BAILEYS_WEBHOOK_SECRET`
-- [ ] Strong database password
-- [ ] HTTPS enabled
-- [ ] File permissions correct (755 for directories, 644 for files)
-- [ ] `.env` file not accessible via web
-- [ ] Sensitive routes protected
-
-### 4. Database Security
-
-```sql
--- Remove anonymous users
-DELETE FROM mysql.user WHERE User='';
-
--- Remove remote root login
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-
--- Remove test database
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-
-FLUSH PRIVILEGES;
+mysqldump -u konektivitas -p konektivitas > /www/backup/konektivitas_$(date +%Y%m%d).sql
 ```
 
 ---
 
-## Backup & Recovery
+## Troubleshooting Production
 
-### 1. Database Backup
-
-Create backup script `/var/www/goblast/scripts/backup-db.sh`:
+### 502 Bad Gateway
 
 ```bash
-#!/bin/bash
-BACKUP_DIR="/var/backups/goblast"
-DATE=$(date +%Y%m%d_%H%M%S)
-DB_NAME="goblast"
-DB_USER="goblast_user"
-DB_PASS="your_password"
-
-mkdir -p $BACKUP_DIR
-
-# Backup database
-mysqldump -u$DB_USER -p$DB_PASS $DB_NAME | gzip > $BACKUP_DIR/db_$DATE.sql.gz
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "db_*.sql.gz" -mtime +7 -delete
-
-echo "Database backup completed: db_$DATE.sql.gz"
+# Cek PHP-FPM
+systemctl status php84-fpm
+systemctl restart php84-fpm
 ```
+
+### Queue Stuck
 
 ```bash
-chmod +x /var/www/goblast/scripts/backup-db.sh
+# Restart queue workers
+supervisorctl restart konektivitas-worker:*
+
+# Atau flush failed jobs
+php artisan queue:flush
 ```
 
-### 2. Session Backup
-
-WhatsApp sessions sangat penting. Backup secara regular:
+### Gateway Down
 
 ```bash
-#!/bin/bash
-BACKUP_DIR="/var/backups/goblast"
-DATE=$(date +%Y%m%d_%H%M%S)
-
-# Backup sessions
-tar -czf $BACKUP_DIR/sessions_$DATE.tar.gz -C /var/www/goblast/gateway sessions/
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "sessions_*.tar.gz" -mtime +7 -delete
+pm2 restart konektivitas-gateway
+pm2 logs konektivitas-gateway --lines 50
 ```
 
-### 3. Automated Backup Cron
+### Permission Issues
 
 ```bash
-sudo crontab -e
+chown -R www:www /www/wwwroot/konektivitas.com/storage
+chmod -R 775 /www/wwwroot/konektivitas.com/storage
 ```
 
-```cron
-# Database backup daily at 02:00
-0 2 * * * /var/www/goblast/scripts/backup-db.sh >> /var/log/goblast-backup.log 2>&1
-
-# Session backup daily at 02:30
-30 2 * * * /var/www/goblast/scripts/backup-sessions.sh >> /var/log/goblast-backup.log 2>&1
-```
-
-### 4. Recovery Procedure
+### Clear All Cache
 
 ```bash
-# Restore database
-gunzip < /var/backups/goblast/db_YYYYMMDD_HHMMSS.sql.gz | mysql -u goblast_user -p goblast
-
-# Restore sessions
-tar -xzf /var/backups/goblast/sessions_YYYYMMDD_HHMMSS.tar.gz -C /var/www/goblast/gateway/
-
-# Restart services
-sudo supervisorctl restart goblast-gateway
-```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. 502 Bad Gateway
-
-```bash
-# Check PHP-FPM status
-sudo systemctl status php8.4-fpm
-
-# Check PHP-FPM logs
-sudo tail -f /var/log/php8.4-fpm.log
-
-# Restart PHP-FPM
-sudo systemctl restart php8.4-fpm
-```
-
-#### 2. Queue Jobs Not Processing
-
-```bash
-# Check worker status
-sudo supervisorctl status goblast-worker:*
-
-# Check failed jobs
-php artisan queue:failed
-
-# Restart workers
-sudo supervisorctl restart goblast-worker:*
-
-# Clear queue (CAUTION: removes all pending jobs)
-php artisan queue:clear
-```
-
-#### 3. Gateway Connection Failed
-
-```bash
-# Check gateway status
-sudo supervisorctl status goblast-gateway
-
-# Check gateway logs
-tail -f /var/www/goblast/storage/logs/gateway.log
-
-# Test gateway health
-curl http://127.0.0.1:3000/health
-
-# Restart gateway
-sudo supervisorctl restart goblast-gateway
-```
-
-#### 4. WhatsApp Device Disconnected
-
-1. Check gateway logs untuk error
-2. Buka halaman Devices di GoBlast
-3. Klik "Disconnect" lalu "Connect" lagi
-4. Scan QR code baru
-
-#### 5. Permission Denied Errors
-
-```bash
-# Fix storage permissions
-sudo chown -R goblast:www-data /var/www/goblast/storage
-sudo chmod -R 775 /var/www/goblast/storage
-
-# Fix bootstrap/cache permissions
-sudo chown -R goblast:www-data /var/www/goblast/bootstrap/cache
-sudo chmod -R 775 /var/www/goblast/bootstrap/cache
-```
-
-#### 6. Memory Issues
-
-```bash
-# Check memory usage
-free -h
-
-# Check PHP memory limit
-php -i | grep memory_limit
-
-# Increase PHP memory in php.ini
-sudo nano /etc/php/8.4/fpm/php.ini
-# Set: memory_limit = 256M
-
-sudo systemctl restart php8.4-fpm
-```
-
-### Useful Commands
-
-```bash
-# Clear all Laravel caches
+cd /www/wwwroot/konektivitas.com
 php artisan optimize:clear
-
-# Rebuild caches
-php artisan optimize
-
-# Check Laravel status
-php artisan about
-
-# Check routes
-php artisan route:list
-
-# Check scheduled tasks
-php artisan schedule:list
-
-# Monitor queue in real-time
-php artisan queue:monitor database:default
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
 ```
-
----
-
-## Deployment Checklist
-
-### Pre-Deployment
-
-- [ ] Backup database
-- [ ] Backup WhatsApp sessions
-- [ ] Notify users of maintenance (if needed)
-
-### Deployment Steps
-
-```bash
-# 1. Pull latest code
-cd /var/www/goblast
-git pull origin main
-
-# 2. Install dependencies
-composer install --no-dev --optimize-autoloader
-npm ci
-npm run build
-
-# 3. Run migrations
-php artisan migrate --force
-
-# 4. Clear and rebuild caches
-php artisan optimize:clear
-php artisan optimize
-
-# 5. Restart queue workers
-sudo supervisorctl restart goblast-worker:*
-
-# 6. Restart gateway (if gateway code changed)
-sudo supervisorctl restart goblast-gateway
-
-# 7. Restart PHP-FPM (optional, for opcache)
-sudo systemctl restart php8.4-fpm
-```
-
-### Post-Deployment
-
-- [ ] Verify application is accessible
-- [ ] Check queue workers are running
-- [ ] Check gateway is connected
-- [ ] Monitor logs for errors
-- [ ] Test critical functionality (send test message)
-
----
-
-## Support
-
-Untuk bantuan lebih lanjut:
-- Dokumentasi API: `/docs/api/README.md`
-- Troubleshooting: Lihat section di atas
-- Logs: `/var/www/goblast/storage/logs/`
-
----
-
-*Last updated: April 2026*

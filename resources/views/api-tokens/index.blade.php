@@ -11,6 +11,9 @@
                 <p class="mt-2 text-sm text-gray-700">
                     Kelola token API untuk integrasi eksternal. Jaga keamanan token Anda dan jangan pernah membagikannya
                     secara publik.
+                    <a href="{{ route('api-docs.index') }}" class="text-green-600 hover:text-green-700 font-medium">
+                        Lihat Dokumentasi API &rarr;
+                    </a>
                 </p>
             </div>
             <div class="mt-4 sm:mt-0">

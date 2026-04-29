@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\PlanController as AdminPlanController;
 use App\Http\Controllers\Admin\SystemConfigController as AdminSystemConfigController;
 use App\Http\Controllers\Admin\SystemLogController as AdminSystemLogController;
 use App\Http\Controllers\Admin\TenantController as AdminTenantController;
+use App\Http\Controllers\ApiDocController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\ContactController;
@@ -28,6 +29,15 @@ Route::get('/', function () {
 
     return view('welcome', ['plans' => $plans]);
 });
+
+// Static pages
+Route::view('/features', 'pages.features')->name('pages.features');
+Route::redirect('/pricing', '/#pricing')->name('pages.pricing');
+Route::view('/about', 'pages.about')->name('pages.about');
+Route::view('/contact', 'pages.contact')->name('pages.contact');
+Route::view('/faq', 'pages.faq')->name('pages.faq');
+Route::view('/privacy', 'pages.privacy')->name('pages.privacy');
+Route::view('/terms', 'pages.terms')->name('pages.terms');
 
 Route::get('/dashboard', function () {
     if (auth()->user()->role === 'superadmin') {
@@ -108,6 +118,9 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // API Token management routes
     Route::resource('api-tokens', ApiTokenController::class)->except(['edit', 'update']);
     Route::post('api-tokens/{apiToken}/revoke', [ApiTokenController::class, 'revoke'])->name('api-tokens.revoke');
+
+    // API Documentation route
+    Route::get('api-docs', ApiDocController::class)->name('api-docs.index');
 });
 
 // Superadmin routes

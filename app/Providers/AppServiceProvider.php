@@ -15,12 +15,14 @@ use App\Services\Contracts\BaileysGatewayClientInterface;
 use App\Services\Contracts\BillingServiceInterface;
 use App\Services\Contracts\BroadcastServiceInterface;
 use App\Services\Contracts\DeviceServiceInterface;
+use App\Services\Contracts\GoogleAuthServiceInterface;
 use App\Services\Contracts\MessageServiceInterface;
 use App\Services\Contracts\QuotaServiceInterface;
 use App\Services\Contracts\ReminderServiceInterface;
 use App\Services\Contracts\SubscriptionServiceInterface;
 use App\Services\Contracts\TemplateServiceInterface;
 use App\Services\DeviceService;
+use App\Services\GoogleAuthService;
 use App\Services\MessageService;
 use App\Services\QuotaService;
 use App\Services\ReminderService;
@@ -47,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(BillingServiceInterface::class, BillingService::class);
         $this->app->bind(AlertServiceInterface::class, AlertService::class);
         $this->app->bind(ReminderServiceInterface::class, ReminderService::class);
+        $this->app->bind(GoogleAuthServiceInterface::class, GoogleAuthService::class);
 
         // Register TemplateService with logger dependency
         $this->app->bind(TemplateService::class, function ($app) {

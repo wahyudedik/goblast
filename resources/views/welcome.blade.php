@@ -12,34 +12,10 @@
 </head>
 
 <body class="antialiased bg-white">
-    <!-- Navigation -->
-    <nav class="bg-white border-b border-gray-200 fixed w-full z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex items-center gap-2">
-                        <img src="{{ asset('logo.png') }}" alt="{{ config('app.name') }}" class="h-8 w-auto">
-                        <span class="text-xl font-bold text-green-600">Konektivitas</span>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    @auth
-                        <a href="{{ route('devices.index') }}"
-                            class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
-                    @else
-                        <a href="{{ route('login') }}"
-                            class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Login</a>
-                        <a href="{{ route('register') }}"
-                            class="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-md text-sm font-medium">Daftar
-                            Gratis</a>
-                    @endauth
-                </div>
-            </div>
-        </div>
-    </nav>
+    @include('partials.public-nav')
 
     <!-- Hero Section -->
-    <section class="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-green-50 to-white">
+    <section class="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-green-50 to-white">
         <div class="max-w-7xl mx-auto">
             <div class="text-center">
                 <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
@@ -144,8 +120,7 @@
                 <!-- Feature 6 -->
                 <div class="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition">
                     <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                         </svg>
@@ -159,7 +134,7 @@
     </section>
 
     <!-- Pricing Section -->
-    <section class="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section id="pricing" class="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
         <div class="max-w-7xl mx-auto">
             <div class="text-center mb-12">
                 <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Paket Langganan</h2>
@@ -267,44 +242,7 @@
         </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="bg-gray-900 text-gray-300 py-12 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div>
-                    <h3 class="text-white text-lg font-semibold mb-4">{{ config('app.name') }}</h3>
-                    <p class="text-sm">Solusi otomasi WhatsApp terpercaya untuk bisnis Anda.</p>
-                </div>
-                <div>
-                    <h4 class="text-white font-semibold mb-4">Produk</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-white">Fitur</a></li>
-                        <li><a href="#" class="hover:text-white">Harga</a></li>
-                        <li><a href="#" class="hover:text-white">API</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="text-white font-semibold mb-4">Perusahaan</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-white">Tentang Kami</a></li>
-                        <li><a href="#" class="hover:text-white">Kontak</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="text-white font-semibold mb-4">Dukungan</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-white">Dokumentasi</a></li>
-                        <li><a href="#" class="hover:text-white">FAQ</a></li>
-                        <li><a href="https://wa.me/6281529211963" target="_blank" class="hover:text-white">WhatsApp
-                                Support</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-sm">
-                <p>&copy; {{ date('Y') }} {{ config('app.name') }}. All rights reserved. Develop by <b>Noteds Technology</b></p>
-            </div>
-        </div>
-    </footer>
+    @include('partials.public-footer')
 </body>
 
 </html>

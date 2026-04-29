@@ -220,6 +220,7 @@ php artisan queue:work --sleep=3 --tries=3
 
 | Role | Email | Password |
 |------|-------|----------|
+| Superadmin | `info@konektivitas.com` | `Wahyu123456789@` |
 | Admin | `admin@demo.test` | `password` |
 | Member | `member@demo.test` | `password` |
 
