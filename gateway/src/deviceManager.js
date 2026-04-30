@@ -1,11 +1,14 @@
-const {
-    default: makeWASocket,
-    DisconnectReason,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    makeInMemoryStore,
-    delay,
-} = require('baileys');
+let makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, delay;
+
+// Baileys v6+ is ESM-only. We use a dynamic import wrapped in a ready promise
+// so the rest of the file (which is CommonJS) can await it before using Baileys.
+const baileysReady = import('baileys').then((mod) => {
+    makeWASocket = mod.default || mod.makeWASocket;
+    DisconnectReason = mod.DisconnectReason;
+    useMultiFileAuthState = mod.useMultiFileAuthState;
+    fetchLatestBaileysVersion = mod.fetchLatestBaileysVersion;
+    delay = mod.delay;
+});
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
@@ -43,7 +46,10 @@ class DeviceManager {
         }
 
         // Restore existing sessions on startup using SessionRestoreQueue
-        this._restoreExistingSessions();
+        // Wait for Baileys to load before restoring
+        baileysReady.then(() => this._restoreExistingSessions()).catch((error) => {
+            logger.error({ error: error.message }, 'Failed to initialize Baileys');
+        });
     }
 
     /**
@@ -77,6 +83,8 @@ class DeviceManager {
      * Initialize a device connection
      */
     async _initDevice(deviceId, waitForQr = true) {
+        await baileysReady;
+
         const sessionDir = path.join(this.sessionPath, deviceId);
 
         if (!fs.existsSync(sessionDir)) {
@@ -286,6 +294,8 @@ class DeviceManager {
      * Send a WhatsApp message
      */
     async sendMessage(deviceId, to, message) {
+        await baileysReady;
+
         if (!this.devices.has(deviceId)) {
             throw new Error(`Device ${deviceId} not found`);
         }
@@ -344,7 +354,7 @@ class DeviceManager {
         if (this.devices.has(deviceId)) {
             const device = this.devices.get(deviceId);
             try {
-                device.socket?.end(undefined);
+                device.socket?.end?.(undefined);
             } catch (e) {
                 // ignore
             }
@@ -364,11 +374,14 @@ class DeviceManager {
         for (const [deviceId, device] of this.devices) {
             if (device.socket) {
                 try {
-                    promises.push(
-                        Promise.resolve(device.socket.end(undefined)).catch((e) => {
-                            logger.warn({ deviceId, error: e.message }, 'Error closing socket');
-                        })
-                    );
+                    const result = device.socket.end?.(undefined);
+                    if (result && typeof result.catch === 'function') {
+                        promises.push(
+                            result.catch((e) => {
+                                logger.warn({ deviceId, error: e.message }, 'Error closing socket');
+                            })
+                        );
+                    }
                 } catch (e) {
                     logger.warn({ deviceId, error: e.message }, 'Error closing socket');
                 }
