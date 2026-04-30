@@ -9,7 +9,7 @@
         "dev:debug": "nodemon --inspect src/index.js"
     },
     "dependencies": {
-        "@whiskeysockets/baileys": "^6.7.18",
+        "baileys": "^6.7.16",
         "axios": "^1.7.9",
         "dotenv": "^16.4.7",
         "express": "^4.21.2",

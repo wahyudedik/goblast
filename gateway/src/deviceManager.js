@@ -5,7 +5,7 @@ const {
     fetchLatestBaileysVersion,
     makeInMemoryStore,
     delay,
-} = require('@whiskeysockets/baileys');
+} = require('baileys');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
