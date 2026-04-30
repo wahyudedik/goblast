@@ -83,7 +83,6 @@ class DeviceManager {
         const sock = makeWASocket({
             version,
             auth: state,
-            printQRInTerminal: true,
             logger: createLogger('baileys').child({ deviceId }),
             browser: ['GoBlast', 'Chrome', '1.0.0'],
             generateHighQualityLinkPreview: false,
@@ -321,11 +320,15 @@ class DeviceManager {
         const promises = [];
         for (const [deviceId, device] of this.devices) {
             if (device.socket) {
-                promises.push(
-                    device.socket.end(undefined).catch((e) => {
-                        logger.warn({ deviceId, error: e.message }, 'Error closing socket');
-                    })
-                );
+                try {
+                    promises.push(
+                        Promise.resolve(device.socket.end(undefined)).catch((e) => {
+                            logger.warn({ deviceId, error: e.message }, 'Error closing socket');
+                        })
+                    );
+                } catch (e) {
+                    logger.warn({ deviceId, error: e.message }, 'Error closing socket');
+                }
             }
         }
         await Promise.allSettled(promises);

@@ -77,7 +77,7 @@ class BaileysGatewayClient implements BaileysGatewayClientInterface
             ]);
 
             throw new GatewayException(
-                'Failed to send message: '.$e->getMessage(),
+                'Failed to send message: ' . $e->getMessage(),
                 $e->getMessage(),
             );
         }
@@ -123,7 +123,7 @@ class BaileysGatewayClient implements BaileysGatewayClientInterface
             ]);
 
             throw new GatewayException(
-                'Failed to get QR code: '.$e->getMessage(),
+                'Failed to get QR code: ' . $e->getMessage(),
                 $e->getMessage(),
             );
         }
@@ -201,7 +201,7 @@ class BaileysGatewayClient implements BaileysGatewayClientInterface
             ]);
 
             throw new GatewayException(
-                'Failed to disconnect device: '.$e->getMessage(),
+                'Failed to disconnect device: ' . $e->getMessage(),
                 $e->getMessage(),
             );
         }
@@ -243,7 +243,7 @@ class BaileysGatewayClient implements BaileysGatewayClientInterface
             ]);
 
             throw new GatewayException(
-                'Failed to restart instance: '.$e->getMessage(),
+                'Failed to restart instance: ' . $e->getMessage(),
                 $e->getMessage(),
             );
         }

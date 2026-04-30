@@ -230,7 +230,40 @@ chmod -R 775 bootstrap/cache
 
 ## Step 11: Konfigurasi Nginx
 
-Di aaPanel → **Website** → klik domain → **Config** (Nginx config).
+Konfigurasi Nginx di aaPanel perlu dipisah menjadi 2 bagian untuk menghindari error "duplicate location".
+
+### 11.1 URL Rewrite (Lakukan Pertama)
+
+Di aaPanel → **Website** → klik domain → **URL rewrite**
+
+Paste konfigurasi berikut:
+
+```nginx
+# Laravel routing
+location / {
+    try_files $uri $uri/ /index.php?$query_string;
+}
+
+# Proxy Baileys Gateway WebSocket (untuk QR code scan)
+location /gateway/ {
+    proxy_pass http://127.0.0.1:3000/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+}
+```
+
+Klik **Save**.
+
+### 11.2 Config Utama (Lakukan Kedua)
+
+Di aaPanel → **Website** → klik domain → **Config** (Nginx config)
 
 Ganti isi config dengan:
 
@@ -239,74 +272,99 @@ server {
     listen 80;
     listen 443 ssl http2;
     server_name konektivitas.com www.konektivitas.com;
-
+    
+    index index.php index.html index.htm default.php default.htm default.html;
     root /www/wwwroot/konektivitas.com/public;
-    index index.php;
-
-    # SSL (dikelola aaPanel)
-    # ssl_certificate    /path/to/cert.pem;
-    # ssl_certificate_key /path/to/key.pem;
-
-    # Redirect HTTP to HTTPS
-    if ($scheme = http) {
-        return 301 https://$host$request_uri;
-    }
-
+    
+    include /www/server/panel/vhost/nginx/extension/konektivitas.com/*.conf;
+    
+    #CERT-APPLY-CHECK--START
+    # Configuration related to file verification for SSL certificate application - Do not delete
+    include /www/server/panel/vhost/nginx/well-known/konektivitas.com.conf;
+    #CERT-APPLY-CHECK--END
+    
+    #SSL-START SSL related configuration, do NOT delete or modify the next line of commented-out 404 rules
+    #error_page 404/404.html;
+    ssl_certificate    /www/server/panel/vhost/cert/konektivitas.com/fullchain.pem;
+    ssl_certificate_key    /www/server/panel/vhost/cert/konektivitas.com/privkey.pem;
+    ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_tickets on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    add_header Strict-Transport-Security "max-age=31536000";
+    error_page 497  https://$host$request_uri;
+    #SSL-END
+    
+    #ERROR-PAGE-START  Error page configuration, allowed to be commented, deleted or modified
+    error_page 404 /404.html;
+    error_page 502 /502.html;
+    #ERROR-PAGE-END
+    
+    #PHP-INFO-START  PHP reference configuration, allowed to be commented, deleted or modified
+    include enable-php-84.conf;
+    #PHP-INFO-END
+    
+    #REWRITE-START URL rewrite rule reference, any modification will invalidate the rewrite rules set by the panel
+    include /www/server/panel/vhost/rewrite/konektivitas.com.conf;
+    #REWRITE-END
+    
     # Redirect www to non-www
     if ($host = www.konektivitas.com) {
         return 301 https://konektivitas.com$request_uri;
     }
-
-    # Laravel
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
+    
+    # Forbidden files or directories
+    location ~ ^/(\.user.ini|\.htaccess|\.git|\.env|\.svn|\.project|LICENSE|README.md) {
+        return 404;
     }
-
-    # PHP
-    location ~ \.php$ {
-        fastcgi_pass unix:/tmp/php-cgi-84.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_read_timeout 300;
+    
+    # Directory verification related settings for one-click application for SSL certificate
+    location ~ \.well-known {
+        allow all;
     }
-
-    # Proxy Baileys Gateway WebSocket (untuk QR code scan)
-    location /gateway/ {
-        proxy_pass http://127.0.0.1:3000/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
+    
+    # Prohibit putting sensitive files in certificate verification directory
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
     }
-
+    
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # Deny access to hidden files
-    location ~ /\. {
-        deny all;
+    
+    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$ {
+        expires      30d;
+        error_log /dev/null;
+        access_log /dev/null;
     }
-
-    # Cache static assets
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
+    
+    location ~ .*\.(js|css)?$ {
+        expires      12h;
+        error_log /dev/null;
+        access_log /dev/null;
     }
-
-    access_log /www/wwwlogs/konektivitas.com.log;
-    error_log /www/wwwlogs/konektivitas.com.error.log;
+    
+    access_log  /www/wwwlogs/konektivitas.com.log;
+    error_log  /www/wwwlogs/konektivitas.com.error.log;
 }
 ```
 
-> **Catatan:** Jangan hapus baris SSL yang di-generate aaPanel. Sesuaikan path `fastcgi_pass` dengan versi PHP yang terinstall.
+Klik **Save**.
 
-Restart Nginx setelah edit config.
+> **Penting:** 
+> - Jangan hapus baris dengan tag `#...-START` dan `#...-END` karena dikelola oleh aaPanel
+> - `location /` dan `location /gateway/` ada di file rewrite, BUKAN di config utama
+> - Urutan: Save URL rewrite dulu, baru save Config utama
+
+### 11.3 Restart Nginx
+
+```bash
+nginx -t && systemctl reload nginx
+```
 
 ---
 
@@ -337,13 +395,13 @@ MESSAGE_DELAY_MAX=7000
 
 ### Jalankan dengan PM2
 
-Install PM2 secara global:
+Install PM2 secara global (bisa dari folder mana saja):
 
 ```bash
 npm install -g pm2
 ```
 
-Start gateway:
+Masuk ke folder gateway dan start:
 
 ```bash
 cd /www/wwwroot/konektivitas.com/gateway
