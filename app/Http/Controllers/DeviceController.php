@@ -6,9 +6,11 @@ use App\Exceptions\DeviceLimitExceededException;
 use App\Exceptions\GatewayException;
 use App\Models\Device;
 use App\Services\Contracts\DeviceServiceInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 
 class DeviceController extends Controller
 {
@@ -51,6 +53,19 @@ class DeviceController extends Controller
     public function create()
     {
         $tenant = Auth::user()->tenant;
+
+        // Check rate limit status to prevent UI bypass
+        $key = md5('device-creation'.'tenant:'.$tenant->id);
+        $maxAttempts = config('wa-automation.gateway_protection.device_creation.max_attempts', 3);
+
+        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            $retryAfter = RateLimiter::availableIn($key);
+
+            return redirect()->route('devices.index')
+                ->with('rate_limited', true)
+                ->with('retry_after', $retryAfter)
+                ->with('error', 'Terlalu banyak percobaan. Silakan tunggu sebelum mencoba lagi.');
+        }
 
         if (! $this->deviceService->canAddDevice($tenant)) {
             return redirect()->route('devices.index')
@@ -245,5 +260,25 @@ class DeviceController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Get rate limit status for device creation (AJAX endpoint).
+     */
+    public function rateLimitStatus(): JsonResponse
+    {
+        $tenant = Auth::user()->tenant;
+        $key = md5('device-creation'.'tenant:'.$tenant->id);
+        $maxAttempts = config('wa-automation.gateway_protection.device_creation.max_attempts', 3);
+
+        $isLimited = RateLimiter::tooManyAttempts($key, $maxAttempts);
+        $attempts = RateLimiter::attempts($key);
+        $availableIn = $isLimited ? RateLimiter::availableIn($key) : 0;
+
+        return response()->json([
+            'is_limited' => $isLimited,
+            'remaining_attempts' => max(0, $maxAttempts - $attempts),
+            'retry_after' => $availableIn,
+        ]);
     }
 }

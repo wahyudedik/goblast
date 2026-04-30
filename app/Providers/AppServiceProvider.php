@@ -28,6 +28,9 @@ use App\Services\QuotaService;
 use App\Services\ReminderService;
 use App\Services\SubscriptionService;
 use App\Services\TemplateService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -62,6 +65,27 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        RateLimiter::for('device-creation', function (Request $request) {
+            $tenant = $request->user()?->tenant;
+
+            if (! $tenant) {
+                return Limit::perMinute(1)->by($request->ip());
+            }
+
+            $maxAttempts = config('wa-automation.gateway_protection.device_creation.max_attempts', 3);
+            $windowSeconds = config('wa-automation.gateway_protection.device_creation.window_seconds', 300);
+
+            return Limit::perMinutes(
+                (int) ceil($windowSeconds / 60),
+                $maxAttempts
+            )->by('tenant:'.$tenant->id)
+                ->response(function (Request $request, array $headers) {
+                    $retryAfter = $headers['Retry-After'] ?? 60;
+
+                    return redirect()->route('devices.index')
+                        ->with('rate_limited', true)
+                        ->with('retry_after', (int) $retryAfter);
+                });
+        });
     }
 }

@@ -160,4 +160,33 @@ return [
         'quota_warning_percentage' => 90,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gateway Protection Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Multi-layered protection settings to prevent WhatsApp account blocking
+    | and IP throttling. Covers device creation rate limiting, graceful
+    | session restoration, and exponential backoff for connection retries.
+    |
+    */
+
+    'gateway_protection' => [
+        'device_creation' => [
+            'max_attempts' => (int) env('WA_GATEWAY_DEVICE_CREATION_MAX_ATTEMPTS', 3),
+            'window_seconds' => (int) env('WA_GATEWAY_DEVICE_CREATION_WINDOW_SECONDS', 300),
+        ],
+        'session_restore' => [
+            'delay_between_sessions_ms' => (int) env('WA_GATEWAY_SESSION_RESTORE_DELAY_MS', 5000),
+            'max_concurrent_restorations' => (int) env('WA_GATEWAY_SESSION_RESTORE_MAX_CONCURRENT', 3),
+        ],
+        'backoff' => [
+            'initial_delay_ms' => (int) env('WA_GATEWAY_BACKOFF_INITIAL_DELAY_MS', 5000),
+            'max_delay_ms' => (int) env('WA_GATEWAY_BACKOFF_MAX_DELAY_MS', 300000),
+            'multiplier' => (float) env('WA_GATEWAY_BACKOFF_MULTIPLIER', 2),
+            'jitter_factor' => (float) env('WA_GATEWAY_BACKOFF_JITTER_FACTOR', 0.3),
+            'max_retries' => (int) env('WA_GATEWAY_BACKOFF_MAX_RETRIES', 10),
+        ],
+    ],
+
 ];

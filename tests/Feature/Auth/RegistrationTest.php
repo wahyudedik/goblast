@@ -28,6 +28,6 @@ class RegistrationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('devices.index'));
+        $response->assertRedirect(route('verification.notice'));
     }
 }

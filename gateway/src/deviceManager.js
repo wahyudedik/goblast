@@ -11,6 +11,8 @@ const path = require('path');
 const fs = require('fs');
 const { createLogger } = require('./logger');
 const { WebhookSender } = require('./webhookSender');
+const { BackoffManager } = require('./backoffManager');
+const { SessionRestoreQueue } = require('./sessionRestoreQueue');
 
 const logger = createLogger('device-manager');
 
@@ -20,33 +22,52 @@ class DeviceManager {
         this.sessionPath = process.env.SESSION_PATH || './sessions';
         this.webhookSender = new WebhookSender();
 
+        // Initialize BackoffManager with config from environment variables
+        this.backoffManager = new BackoffManager({
+            initialDelay: process.env.BACKOFF_INITIAL_DELAY_MS ? parseInt(process.env.BACKOFF_INITIAL_DELAY_MS) : undefined,
+            maxDelay: process.env.BACKOFF_MAX_DELAY_MS ? parseInt(process.env.BACKOFF_MAX_DELAY_MS) : undefined,
+            multiplier: process.env.BACKOFF_MULTIPLIER ? parseFloat(process.env.BACKOFF_MULTIPLIER) : undefined,
+            jitterFactor: process.env.BACKOFF_JITTER_FACTOR !== undefined ? parseFloat(process.env.BACKOFF_JITTER_FACTOR) : undefined,
+            maxRetries: process.env.BACKOFF_MAX_RETRIES ? parseInt(process.env.BACKOFF_MAX_RETRIES) : undefined,
+        });
+
+        // Initialize SessionRestoreQueue
+        this.sessionRestoreQueue = new SessionRestoreQueue(this, {
+            delayBetweenSessions: process.env.SESSION_RESTORE_DELAY_MS ? parseInt(process.env.SESSION_RESTORE_DELAY_MS) : undefined,
+            maxConcurrent: process.env.SESSION_RESTORE_MAX_CONCURRENT ? parseInt(process.env.SESSION_RESTORE_MAX_CONCURRENT) : undefined,
+        });
+
         // Ensure session directory exists
         if (!fs.existsSync(this.sessionPath)) {
             fs.mkdirSync(this.sessionPath, { recursive: true });
         }
 
-        // Restore existing sessions on startup
+        // Restore existing sessions on startup using SessionRestoreQueue
         this._restoreExistingSessions();
     }
 
     /**
-     * Restore sessions from disk on startup
+     * Restore sessions from disk on startup using SessionRestoreQueue
      */
     async _restoreExistingSessions() {
         try {
             const sessionDirs = fs.readdirSync(this.sessionPath).filter((dir) => {
-                return fs.statSync(path.join(this.sessionPath, dir)).isDirectory();
+                const fullPath = path.join(this.sessionPath, dir);
+                return fs.statSync(fullPath).isDirectory() && !dir.startsWith('.');
             });
 
-            logger.info({ count: sessionDirs.length }, 'Restoring existing sessions');
+            logger.info({ count: sessionDirs.length }, 'Enqueuing sessions for gradual restoration');
 
-            for (const deviceId of sessionDirs) {
-                try {
-                    await this._initDevice(deviceId, false);
-                } catch (error) {
-                    logger.error({ deviceId, error: error.message }, 'Failed to restore session');
-                }
-            }
+            this.sessionRestoreQueue.enqueueAll(sessionDirs);
+            await this.sessionRestoreQueue.processQueue();
+
+            // Send restore complete webhook
+            const progress = this.sessionRestoreQueue.getProgress();
+            await this.webhookSender.sendRestoreComplete({
+                total: progress.total,
+                restored: progress.restored,
+                failed: progress.failed,
+            });
         } catch (error) {
             logger.error({ error: error.message }, 'Failed to restore sessions');
         }
@@ -132,8 +153,22 @@ class DeviceManager {
                 });
 
                 if (shouldReconnect) {
-                    logger.info({ deviceId }, 'Reconnecting...');
-                    setTimeout(() => this._initDevice(deviceId, false), 3000);
+                    const errorMessage = lastDisconnect?.error?.message || 'Unknown error';
+                    const { delay: retryDelay, attempt, shouldRetry } = this.backoffManager.recordFailure(deviceId, errorMessage);
+
+                    if (shouldRetry) {
+                        logger.info({ deviceId, attempt, retryDelay }, 'Scheduling reconnect with backoff');
+                        setTimeout(() => this._initDevice(deviceId, false), retryDelay);
+                    } else {
+                        // Max retries reached - send manual intervention webhook
+                        const state = this.backoffManager.getState(deviceId);
+                        logger.warn({ deviceId, attempt }, 'Max retries reached, manual intervention required');
+                        await this.webhookSender.sendManualIntervention(
+                            deviceId,
+                            state.failures,
+                            state.lastError
+                        );
+                    }
                 } else {
                     // Logged out - clean up session
                     logger.info({ deviceId }, 'Device logged out, cleaning session');
@@ -145,6 +180,9 @@ class DeviceManager {
                 deviceEntry.status = 'connected';
                 deviceEntry.qrCode = null;
                 deviceEntry.phoneNumber = sock.user?.id?.split(':')[0];
+
+                // Reset backoff state on successful connection
+                this.backoffManager.recordSuccess(deviceId);
 
                 // Notify Laravel
                 await this.webhookSender.sendStatusUpdate(deviceId, 'connected', {
@@ -199,6 +237,11 @@ class DeviceManager {
             if (device.qrCode) {
                 return device.qrCode;
             }
+        }
+
+        // Prioritize this device if session restoration is in progress
+        if (this.sessionRestoreQueue.isRestoring()) {
+            this.sessionRestoreQueue.prioritizeDevice(deviceId);
         }
 
         // Initialize device if not exists

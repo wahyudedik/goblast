@@ -48,6 +48,44 @@ class WebhookSender {
     }
 
     /**
+     * Send session restore complete notification to Laravel
+     */
+    async sendRestoreComplete(stats) {
+        const payload = {
+            event: 'session.restore_complete',
+            device_id: 'system',
+            from: 'system',
+            message: 'Session restoration completed',
+            stats: {
+                total: stats.total,
+                restored: stats.restored,
+                failed: stats.failed,
+            },
+            timestamp: new Date().toISOString(),
+        };
+
+        return this._send(payload);
+    }
+
+    /**
+     * Send manual intervention required notification to Laravel
+     */
+    async sendManualIntervention(deviceId, failureCount, lastError) {
+        const payload = {
+            event: 'device.manual_intervention',
+            device_id: deviceId,
+            from: deviceId,
+            message: `Device requires manual intervention after ${failureCount} failed connection attempts`,
+            status: 'manual_intervention_required',
+            failure_count: failureCount,
+            last_error: lastError,
+            timestamp: new Date().toISOString(),
+        };
+
+        return this._send(payload);
+    }
+
+    /**
      * Send payload to Laravel webhook endpoint
      */
     async _send(payload) {

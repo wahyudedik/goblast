@@ -3,7 +3,21 @@
 @section('page-title', 'Device')
 
 @section('content')
-    <div class="space-y-6">
+    <div class="space-y-6" x-data="rateLimitCountdown({{ (int) session('retry_after', 0) }})">
+        <!-- Rate Limit Toast Notification -->
+        <template x-if="showToast">
+            <div class="rounded-lg bg-yellow-50 p-4 border border-yellow-200" x-transition>
+                <div class="flex">
+                    <svg class="h-5 w-5 text-yellow-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    <p class="ml-3 text-sm font-medium text-yellow-800" x-text="toastMessage"></p>
+                </div>
+            </div>
+        </template>
+
         <!-- Header -->
         <div class="sm:flex sm:items-center sm:justify-between">
             <div>
@@ -14,25 +28,38 @@
                 </p>
             </div>
             <div class="mt-4 sm:mt-0">
-                @if ($canAddDevice)
-                    <a href="{{ route('devices.create') }}"
-                        class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600">
-                        <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path
-                                d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                        </svg>
-                        Tambah Device
-                    </a>
-                @else
+                <template x-if="isLimited">
                     <button type="button" disabled
                         class="inline-flex items-center rounded-md bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-500 cursor-not-allowed">
                         <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path
-                                d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                            <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"
+                                clip-rule="evenodd" />
                         </svg>
-                        Batas Device Tercapai
+                        <span x-text="countdownText"></span>
                     </button>
-                @endif
+                </template>
+                <template x-if="!isLimited">
+                    @if ($canAddDevice)
+                        <a href="{{ route('devices.create') }}"
+                            class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600">
+                            <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path
+                                    d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                            </svg>
+                            Tambah Device
+                        </a>
+                    @else
+                        <button type="button" disabled
+                            class="inline-flex items-center rounded-md bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-500 cursor-not-allowed">
+                            <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path
+                                    d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                            </svg>
+                            Batas Device Tercapai
+                        </button>
+                    @endif
+                </template>
             </div>
         </div>
 
@@ -47,14 +74,27 @@
                 <p class="mt-1 text-sm text-gray-500">Mulai dengan menambahkan device baru.</p>
                 @if ($canAddDevice)
                     <div class="mt-6">
-                        <a href="{{ route('devices.create') }}"
-                            class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
-                            <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path
-                                    d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                            </svg>
-                            Tambah Device
-                        </a>
+                        <template x-if="!isLimited">
+                            <a href="{{ route('devices.create') }}"
+                                class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
+                                <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path
+                                        d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                                </svg>
+                                Tambah Device
+                            </a>
+                        </template>
+                        <template x-if="isLimited">
+                            <button type="button" disabled
+                                class="inline-flex items-center rounded-md bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-500 cursor-not-allowed">
+                                <svg class="-ms-0.5 me-1.5 size-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                                <span x-text="countdownText"></span>
+                            </button>
+                        </template>
                     </div>
                 @endif
             </div>
@@ -149,7 +189,8 @@
 
                                         @if (in_array($device->status, ['connected', 'pending']))
                                             <form action="{{ route('devices.disconnect', $device) }}" method="POST"
-                                                class="inline" data-confirm="Apakah Anda yakin ingin memutuskan device ini?"
+                                                class="inline"
+                                                data-confirm="Apakah Anda yakin ingin memutuskan device ini?"
                                                 data-confirm-title="Putuskan Device" data-confirm-button="Ya, Putuskan"
                                                 data-confirm-type="warning">
                                                 @csrf
@@ -180,3 +221,80 @@
         @endif
     </div>
 @endsection
+
+@push('scripts')
+    <script>
+        function rateLimitCountdown(retryAfterSeconds) {
+            return {
+                remaining: 0,
+                showToast: false,
+                interval: null,
+
+                get isLimited() {
+                    return this.remaining > 0;
+                },
+
+                get minutes() {
+                    return Math.floor(this.remaining / 60);
+                },
+
+                get seconds() {
+                    return this.remaining % 60;
+                },
+
+                get countdownText() {
+                    return `Tunggu ${this.minutes}m ${String(this.seconds).padStart(2, '0')}s`;
+                },
+
+                get toastMessage() {
+                    return `Terlalu banyak percobaan. Silakan tunggu ${this.minutes} menit ${this.seconds} detik sebelum mencoba lagi.`;
+                },
+
+                init() {
+                    // Check sessionStorage for persisted expiry
+                    const storedExpiry = sessionStorage.getItem('device_rate_limit_expiry');
+
+                    if (retryAfterSeconds > 0) {
+                        // Fresh rate limit from server — store expiry timestamp
+                        const expiryTime = Date.now() + (retryAfterSeconds * 1000);
+                        sessionStorage.setItem('device_rate_limit_expiry', expiryTime);
+                        this.remaining = retryAfterSeconds;
+                        this.showToast = true;
+                    } else if (storedExpiry) {
+                        // Restore from sessionStorage (page navigation)
+                        const secondsLeft = Math.ceil((parseInt(storedExpiry) - Date.now()) / 1000);
+                        if (secondsLeft > 0) {
+                            this.remaining = secondsLeft;
+                            this.showToast = true;
+                        } else {
+                            sessionStorage.removeItem('device_rate_limit_expiry');
+                        }
+                    }
+
+                    if (this.remaining > 0) {
+                        this.startCountdown();
+                    }
+                },
+
+                startCountdown() {
+                    this.interval = setInterval(() => {
+                        this.remaining--;
+
+                        if (this.remaining <= 0) {
+                            this.remaining = 0;
+                            this.showToast = false;
+                            sessionStorage.removeItem('device_rate_limit_expiry');
+                            clearInterval(this.interval);
+                        }
+                    }, 1000);
+                },
+
+                destroy() {
+                    if (this.interval) {
+                        clearInterval(this.interval);
+                    }
+                }
+            };
+        }
+    </script>
+@endpush

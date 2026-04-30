@@ -56,7 +56,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // Authenticated tenant routes (requires email verification)
 Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // Device management routes
-    Route::resource('devices', DeviceController::class);
+    Route::get('devices/rate-limit-status', [DeviceController::class, 'rateLimitStatus'])->name('devices.rate-limit-status');
+    Route::resource('devices', DeviceController::class)->except(['store']);
+    Route::post('devices', [DeviceController::class, 'store'])->name('devices.store')->middleware('throttle:device-creation');
     Route::get('devices/{device}/connect', [DeviceController::class, 'connect'])->name('devices.connect');
     Route::post('devices/{device}/disconnect', [DeviceController::class, 'disconnect'])->name('devices.disconnect');
     Route::get('devices/{device}/check-status', [DeviceController::class, 'checkStatus'])->name('devices.check-status');

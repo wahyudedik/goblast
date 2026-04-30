@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Device;
+use App\Models\SystemLog;
+use App\Services\Contracts\AlertServiceInterface;
 use App\Services\Contracts\AutoReplyServiceInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -27,7 +29,7 @@ class ProcessWebhookJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(AutoReplyServiceInterface $autoReplyService): void
+    public function handle(AutoReplyServiceInterface $autoReplyService, AlertServiceInterface $alertService): void
     {
         try {
             // Validate required payload fields
@@ -40,35 +42,12 @@ class ProcessWebhookJob implements ShouldQueue
             }
 
             $event = $this->payload['event'];
-            $deviceId = $this->payload['device_id'];
-            $from = $this->payload['from'];
-            $message = $this->payload['message'];
-            $timestamp = $this->payload['timestamp'] ?? null;
 
-            // Find the device
-            $device = Device::where('gateway_device_id', $deviceId)->first();
-
-            if (! $device) {
-                Log::warning('Device not found for webhook', [
-                    'gateway_device_id' => $deviceId,
-                    'payload' => $this->payload,
-                ]);
-
-                return;
-            }
-
-            // Calculate received_at from timestamp or use current time
-            $receivedAt = $timestamp ? now()->setTimestamp((int) ($timestamp / 1000)) : now();
-
-            // Process incoming message through AutoReplyService
-            $autoReplyService->processIncomingMessage($deviceId, $from, $message);
-
-            Log::info('Webhook processed successfully', [
-                'event' => $event,
-                'device_id' => $deviceId,
-                'from' => $from,
-                'tenant_id' => $device->tenant_id,
-            ]);
+            match ($event) {
+                'session.restore_complete' => $this->handleSessionRestoreComplete(),
+                'device.manual_intervention' => $this->handleDeviceManualIntervention($alertService),
+                default => $this->handleDefault($autoReplyService),
+            };
         } catch (Throwable $e) {
             Log::error('Error processing webhook', [
                 'payload' => $this->payload,
@@ -78,6 +57,102 @@ class ProcessWebhookJob implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Handle session.restore_complete event by logging restore stats.
+     */
+    protected function handleSessionRestoreComplete(): void
+    {
+        $stats = $this->payload['stats'] ?? [];
+
+        SystemLog::create([
+            'type' => 'gateway',
+            'severity' => 'info',
+            'message' => $this->payload['message'] ?? 'Session restoration completed',
+            'context' => [
+                'event' => 'session.restore_complete',
+                'stats' => $stats,
+                'timestamp' => $this->payload['timestamp'] ?? now()->toIso8601String(),
+            ],
+        ]);
+
+        Log::info('Session restore complete webhook processed', [
+            'stats' => $stats,
+        ]);
+    }
+
+    /**
+     * Handle device.manual_intervention event by updating device status and creating an alert.
+     */
+    protected function handleDeviceManualIntervention(AlertServiceInterface $alertService): void
+    {
+        $deviceId = $this->payload['device_id'];
+
+        $device = Device::where('gateway_device_id', $deviceId)->first();
+
+        if (! $device) {
+            Log::warning('Device not found for manual intervention webhook', [
+                'gateway_device_id' => $deviceId,
+                'payload' => $this->payload,
+            ]);
+
+            return;
+        }
+
+        $device->update([
+            'status' => 'error',
+        ]);
+
+        $alertService->create(
+            type: 'gateway.down',
+            message: $this->payload['message'] ?? 'Device requires manual intervention',
+            severity: 'critical',
+            tenant: $device->tenant,
+            context: [
+                'device_id' => $device->id,
+                'gateway_device_id' => $deviceId,
+                'status' => $this->payload['status'] ?? 'manual_intervention_required',
+                'failure_count' => $this->payload['failure_count'] ?? null,
+                'last_error' => $this->payload['last_error'] ?? null,
+            ],
+        );
+
+        Log::info('Device manual intervention webhook processed', [
+            'device_id' => $device->id,
+            'gateway_device_id' => $deviceId,
+            'tenant_id' => $device->tenant_id,
+        ]);
+    }
+
+    /**
+     * Handle default webhook events (e.g., message.received) via AutoReplyService.
+     */
+    protected function handleDefault(AutoReplyServiceInterface $autoReplyService): void
+    {
+        $deviceId = $this->payload['device_id'];
+        $from = $this->payload['from'];
+        $message = $this->payload['message'];
+
+        $device = Device::where('gateway_device_id', $deviceId)->first();
+
+        if (! $device) {
+            Log::warning('Device not found for webhook', [
+                'gateway_device_id' => $deviceId,
+                'payload' => $this->payload,
+            ]);
+
+            return;
+        }
+
+        $autoReplyService->processIncomingMessage($deviceId, $from, $message);
+
+        Log::info('Webhook processed successfully', [
+            'event' => $this->payload['event'],
+            'device_id' => $deviceId,
+            'from' => $from,
+            'tenant_id' => $device->tenant_id,
+        ]);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Jobs\ProcessWebhookJob;
 use App\Models\Device;
 use App\Models\Tenant;
+use App\Services\Contracts\AlertServiceInterface;
 use App\Services\Contracts\AutoReplyServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,9 +37,11 @@ class ProcessWebhookJobTest extends TestCase
             ->once()
             ->with('test-device-123', '6281234567890', 'test message');
 
+        $alertService = $this->mock(AlertServiceInterface::class);
+
         // Act
         $job = new ProcessWebhookJob($payload);
-        $job->handle($autoReplyService);
+        $job->handle($autoReplyService, $alertService);
 
         // Assert - AutoReplyService was called
         $this->assertTrue(true);
@@ -55,9 +58,11 @@ class ProcessWebhookJobTest extends TestCase
         $autoReplyService = $this->mock(AutoReplyServiceInterface::class);
         $autoReplyService->shouldNotReceive('processIncomingMessage');
 
+        $alertService = $this->mock(AlertServiceInterface::class);
+
         // Act
         $job = new ProcessWebhookJob($payload);
-        $job->handle($autoReplyService);
+        $job->handle($autoReplyService, $alertService);
 
         // Assert - AutoReplyService was not called
         $this->assertTrue(true);
@@ -77,9 +82,11 @@ class ProcessWebhookJobTest extends TestCase
         $autoReplyService = $this->mock(AutoReplyServiceInterface::class);
         $autoReplyService->shouldNotReceive('processIncomingMessage');
 
+        $alertService = $this->mock(AlertServiceInterface::class);
+
         // Act
         $job = new ProcessWebhookJob($payload);
-        $job->handle($autoReplyService);
+        $job->handle($autoReplyService, $alertService);
 
         // Assert - Job completes without error even if device not found
         $this->assertTrue(true);

@@ -22,11 +22,39 @@ const deviceManager = new DeviceManager();
 // Health Check
 // ============================================================
 app.get('/health', (req, res) => {
+    const restoreProgress = deviceManager.sessionRestoreQueue.getProgress();
+    const devicesInBackoff = deviceManager.backoffManager.getAllInBackoff();
+    const maxConnections = parseInt(process.env.MAX_CONNECTIONS, 10) || 100;
+
     res.json({
         status: 'ok',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         devices: deviceManager.getDeviceCount(),
+        protection: {
+            session_restore: {
+                status: restoreProgress.status,
+                progress_percentage: restoreProgress.total > 0
+                    ? Math.round(((restoreProgress.restored + restoreProgress.failed) / restoreProgress.total) * 100)
+                    : 0,
+                total: restoreProgress.total,
+                restored: restoreProgress.restored,
+                failed: restoreProgress.failed,
+                pending: restoreProgress.pending,
+            },
+            backoff: {
+                devices_in_backoff: devicesInBackoff.length,
+                devices: devicesInBackoff.map(d => ({
+                    device_id: d.deviceId,
+                    failures: d.failures,
+                    next_retry_at: d.nextRetryAt,
+                })),
+            },
+            capacity: {
+                active_connections: deviceManager.getDeviceCount(),
+                max_connections: maxConnections,
+            },
+        },
     });
 });
 
