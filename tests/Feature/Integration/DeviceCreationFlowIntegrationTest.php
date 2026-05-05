@@ -6,7 +6,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Contracts\BaileysGatewayClientInterface;
+use App\Services\Contracts\GatewayClientInterface;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\RateLimiter;
@@ -36,9 +36,9 @@ class DeviceCreationFlowIntegrationTest extends TestCase
         $this->maxAttempts = config('wa-automation.gateway_protection.device_creation.max_attempts', 3);
 
         // Mock the gateway client so store requests don't hit a real gateway
-        $mock = $this->createMock(BaileysGatewayClientInterface::class);
+        $mock = $this->createMock(GatewayClientInterface::class);
         $mock->method('getQrCode')->willReturn('mock-qr-code');
-        $this->app->instance(BaileysGatewayClientInterface::class, $mock);
+        $this->app->instance(GatewayClientInterface::class, $mock);
     }
 
     protected function tearDown(): void

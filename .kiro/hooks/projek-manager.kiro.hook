@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Projek Manager",
+  "description": "A user-triggered hook that acts as a project manager — reviews the current state of the project, summarizes recent changes, and suggests next steps or outstanding tasks.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Act as a project manager for this Laravel application. Review the current state of the project by checking recent git changes, open spec tasks, and the overall codebase structure. Then provide: 1) A brief summary of what has recently been worked on, 2) Any incomplete or in-progress features you can identify, 3) Suggested next steps or priorities to move the project forward. Be concise and actionable."
+  }
+}

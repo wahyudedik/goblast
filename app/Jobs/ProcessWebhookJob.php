@@ -126,11 +126,22 @@ class ProcessWebhookJob implements ShouldQueue
     }
 
     /**
-     * Handle default webhook events (e.g., message.received) via AutoReplyService.
+     * Handle default webhook events (e.g., message) via AutoReplyService.
      */
     protected function handleDefault(AutoReplyServiceInterface $autoReplyService): void
     {
         $deviceId = $this->payload['device_id'];
+
+        // Guard: 'from' and 'message' are required for message processing
+        if (empty($this->payload['from']) || empty($this->payload['message'])) {
+            Log::warning('Webhook handleDefault missing from or message fields', [
+                'event' => $this->payload['event'],
+                'device_id' => $deviceId,
+            ]);
+
+            return;
+        }
+
         $from = $this->payload['from'];
         $message = $this->payload['message'];
 
@@ -157,13 +168,20 @@ class ProcessWebhookJob implements ShouldQueue
 
     /**
      * Validate webhook payload structure.
+     *
+     * All events require 'event' and 'device_id'.
+     * The 'message' event additionally requires 'from' and 'message'.
      */
     protected function validatePayload(): bool
     {
-        $requiredFields = ['event', 'device_id', 'from', 'message'];
+        // All events require 'event' and 'device_id'
+        if (empty($this->payload['event']) || empty($this->payload['device_id'])) {
+            return false;
+        }
 
-        foreach ($requiredFields as $field) {
-            if (! isset($this->payload[$field]) || empty($this->payload[$field])) {
+        // 'message' event additionally requires 'from' and 'message'
+        if ($this->payload['event'] === 'message') {
+            if (empty($this->payload['from']) || empty($this->payload['message'])) {
                 return false;
             }
         }

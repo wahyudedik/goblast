@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Code Quality Analyzer",
+  "description": "Analyzes modified source code files for potential improvements including code smells, design patterns, and best practices. Generates suggestions for readability, maintainability, and performance optimizations.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.php",
+      "**/*.js",
+      "**/*.ts",
+      "**/*.vue",
+      "**/*.jsx",
+      "**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A source code file was just modified. Please analyze the changes for potential improvements. Look for:\n- Code smells (long methods, duplicate code, large classes, etc.)\n- Opportunities to apply design patterns\n- Best practices violations for the language/framework in use\n- Readability improvements (naming, structure, comments)\n- Maintainability concerns (coupling, cohesion, complexity)\n- Performance optimizations\n\nProvide concise, actionable suggestions while being careful not to change existing functionality. Focus only on meaningful improvements, not trivial style preferences."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Laravel Expert",
+  "description": "Activates Laravel best practices expertise before every task, ensuring the agent follows Laravel conventions, patterns, and guidelines throughout the session.",
+  "version": "1",
+  "when": {
+    "type": "preTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "You are a Laravel expert. Before proceeding with any task, activate the `laravel-best-practices` skill and apply it throughout your work. Follow all Laravel conventions, use proper Eloquent patterns, avoid N+1 queries, apply authorization correctly, and write clean, idiomatic Laravel code. Always search docs before making changes using the `search-docs` tool."
+  }
+}

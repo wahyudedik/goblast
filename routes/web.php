@@ -168,5 +168,6 @@ Route::middleware(['auth', 'verified', 'role:superadmin'])->prefix('admin')->nam
 
 // Webhook routes (no authentication required - signature validation in controller)
 Route::post('/webhook/baileys', [WebhookController::class, 'baileys'])->name('webhook.baileys');
+Route::post('/webhook/waha', [WebhookController::class, 'waha'])->name('webhook.waha');
 
 require __DIR__.'/auth.php';

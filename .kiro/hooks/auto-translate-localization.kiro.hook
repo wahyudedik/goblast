@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Auto-Translate Localization Files",
+  "description": "Monitors changes to user-facing text content files (JSON, YAML, localization files) in the primary language. When changes are detected, identifies new or modified text and generates translations for all configured target languages, maintaining proper context and locale-specific conventions.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.json",
+      "**/*.yaml",
+      "**/*.yml",
+      "resources/lang/**/*",
+      "lang/**/*"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A localization or user-facing text file has been modified. Please:\n1. Identify which strings were added or changed in the file.\n2. Determine the primary/source language from the file path or content.\n3. Detect all configured target languages by inspecting sibling language directories or config files (e.g., config/app.php, lang/, resources/lang/).\n4. Generate accurate translations for each new or modified string in every target language.\n5. Write the translations to the appropriate target language files, preserving file structure, key ordering, and any existing translations.\n6. Ensure translations respect locale-specific conventions (date formats, pluralization rules, formal/informal register) and maintain the original meaning and context."
+  }
+}

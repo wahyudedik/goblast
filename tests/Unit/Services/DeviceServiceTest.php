@@ -8,7 +8,7 @@ use App\Models\Device;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Tenant;
-use App\Services\Contracts\BaileysGatewayClientInterface;
+use App\Services\Contracts\GatewayClientInterface;
 use App\Services\DeviceService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -19,13 +19,13 @@ class DeviceServiceTest extends TestCase
 
     private DeviceService $deviceService;
 
-    private BaileysGatewayClientInterface $gatewayClient;
+    private GatewayClientInterface $gatewayClient;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->gatewayClient = $this->createMock(BaileysGatewayClientInterface::class);
+        $this->gatewayClient = $this->createMock(GatewayClientInterface::class);
         $this->deviceService = new DeviceService($this->gatewayClient);
     }
 
@@ -345,5 +345,74 @@ class DeviceServiceTest extends TestCase
         ]);
 
         $this->assertFalse($this->deviceService->canAddDevice($tenant));
+    }
+
+    // Task 5.1: Tests using GatewayClientInterface
+
+    public function test_request_connection_calls_gateway_client_interface_get_qr_code_with_gateway_device_id(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create(['max_devices' => 1, 'has_multi_device' => false]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+        ]);
+
+        $gatewayClient = $this->createMock(GatewayClientInterface::class);
+        $gatewayClient
+            ->expects($this->once())
+            ->method('getQrCode')
+            ->with($this->matchesRegularExpression('/^[0-9a-f\-]{36}$/'))
+            ->willReturn('qr_code_data');
+
+        $deviceService = new DeviceService($gatewayClient);
+        $device = $deviceService->requestConnection($tenant, 'Test Device');
+
+        $this->assertNotNull($device->gateway_device_id);
+    }
+
+    public function test_check_connection_status_calls_gateway_client_interface_get_connection_status(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $device = Device::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => 'connected',
+        ]);
+
+        $gatewayClient = $this->createMock(GatewayClientInterface::class);
+        $gatewayClient
+            ->expects($this->once())
+            ->method('getConnectionStatus')
+            ->with($device->gateway_device_id)
+            ->willReturn('connected');
+
+        $deviceService = new DeviceService($gatewayClient);
+        $status = $deviceService->checkConnectionStatus($device);
+
+        $this->assertEquals('connected', $status);
+    }
+
+    public function test_disconnect_calls_gateway_client_interface_disconnect_device(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $device = Device::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => 'connected',
+            'session_data' => 'encrypted_data',
+            'phone_number' => '6281234567890',
+        ]);
+
+        $gatewayClient = $this->createMock(GatewayClientInterface::class);
+        $gatewayClient
+            ->expects($this->once())
+            ->method('disconnectDevice')
+            ->with($device->gateway_device_id);
+
+        $deviceService = new DeviceService($gatewayClient);
+        $deviceService->disconnect($device);
+
+        $device->refresh();
+        $this->assertEquals('disconnected', $device->status);
     }
 }

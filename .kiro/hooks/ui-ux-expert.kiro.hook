@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "name": "UI/UX Expert Review",
+  "description": "Automatically reviews frontend file changes from a UI/UX expert perspective, providing feedback on usability, accessibility, visual design, and user experience best practices.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.blade.php",
+      "*.css",
+      "*.js",
+      "*.ts",
+      "*.tsx",
+      "*.jsx",
+      "*.vue",
+      "*.html"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "You are a UI/UX expert. Review the changes made to this file and provide concise, actionable feedback on: usability and user flow, visual hierarchy and layout, accessibility (WCAG compliance, keyboard navigation, screen reader support), responsive design, consistency with design patterns, and any potential friction points for users. Flag any issues and suggest improvements. Be specific and practical."
+  }
+}

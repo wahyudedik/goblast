@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Alert;
 use App\Models\MessageLog;
-use App\Services\Contracts\BaileysGatewayClientInterface;
+use App\Services\Contracts\GatewayClientInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -31,7 +31,7 @@ class SendMessageJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(BaileysGatewayClientInterface $client): void
+    public function handle(GatewayClientInterface $client): void
     {
         // Validate subscription status before sending
         $subscription = $this->messageLog->tenant->subscriptions()

@@ -4,6 +4,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | WAHA Gateway Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for the WAHA (WhatsApp HTTP API) gateway service that
+    | handles WhatsApp connections and message delivery.
+    |
+    */
+
+    'waha' => [
+        'base_url' => env('WAHA_BASE_URL', 'https://wa.konektivitas.com'),
+        'api_key' => env('WAHA_API_KEY'),
+        'webhook_url' => env('WAHA_WEBHOOK_URL'),
+        'webhook_token' => env('WAHA_WEBHOOK_TOKEN'),
+        'timeout' => 30,
+        'max_retries' => 3,
+        'retry_backoff' => [1000, 2000, 4000],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Baileys Gateway Configuration
     |--------------------------------------------------------------------------
     |

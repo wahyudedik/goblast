@@ -6,14 +6,14 @@ use App\Exceptions\DeviceLimitExceededException;
 use App\Exceptions\GatewayException;
 use App\Models\Device;
 use App\Models\Tenant;
-use App\Services\Contracts\BaileysGatewayClientInterface;
 use App\Services\Contracts\DeviceServiceInterface;
+use App\Services\Contracts\GatewayClientInterface;
 use Illuminate\Support\Str;
 
 class DeviceService implements DeviceServiceInterface
 {
     public function __construct(
-        protected BaileysGatewayClientInterface $gatewayClient,
+        protected GatewayClientInterface $gatewayClient,
     ) {}
 
     /**

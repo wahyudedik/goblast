@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Run Tests",
+  "description": "Runs the PHPUnit test suite after the agent completes a task",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "php artisan test --compact"
+  }
+}

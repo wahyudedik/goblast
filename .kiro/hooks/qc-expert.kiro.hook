@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "QC Expert",
+  "description": "Automatically reviews edited PHP and frontend files for code quality, best practices, and potential issues after each save",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.php",
+      "*.blade.php",
+      "*.js",
+      "*.ts",
+      "*.vue"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Act as a QC expert and review the recently edited file(s) for the following:\n- Code quality and adherence to project conventions\n- Laravel best practices (N+1 queries, proper use of Eloquent, service layer patterns)\n- Security issues (SQL injection, XSS, missing authorization checks, unvalidated input)\n- Missing or incorrect type hints and return types\n- Logic errors or edge cases that could cause bugs\n- Proper error handling\n- Tailwind/Blade template issues if applicable\n\nReport any issues found with clear explanations and suggested fixes. If the code looks good, say so briefly."
+  }
+}

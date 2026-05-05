@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "QA Expert",
+  "description": "Automatically reviews edited files from a QA perspective, checking for bugs, edge cases, security issues, and code quality concerns",
+  "version": "1",
+  "when": {
+    "type": "postToolUse",
+    "toolTypes": [
+      "write"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Act as a QA expert and review the code changes that were just made. Check for: bugs and logic errors, unhandled edge cases, security vulnerabilities, missing input validation, error handling gaps, potential performance issues, and anything that could break existing functionality. Be concise — only flag real concerns, not style preferences."
+  }
+}

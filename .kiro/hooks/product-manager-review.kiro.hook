@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Product Manager Review",
+  "description": "Reviews file changes from a product manager perspective, ensuring they align with product goals and requirements",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.php",
+      "*.blade.php",
+      "*.js",
+      "*.ts",
+      "*.vue"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the recent file changes from a product manager perspective. Check that: 1) The changes align with the product's goals and user needs, 2) Any new features or modifications are complete and not half-implemented, 3) User-facing text, labels, and messages are clear and professional, 4) No unintended side effects or regressions are introduced. Summarize what changed and flag any concerns."
+  }
+}

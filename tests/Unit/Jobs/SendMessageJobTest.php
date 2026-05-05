@@ -9,8 +9,8 @@ use App\Models\MessageLog;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Tenant;
-use App\Services\Contracts\BaileysGatewayClientInterface;
-use App\Services\ValueObjects\BaileysResponse;
+use App\Services\Contracts\GatewayClientInterface;
+use App\Services\ValueObjects\GatewayResponse;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -37,11 +37,11 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->once()
             ->with($device->gateway_device_id, $messageLog->recipient, $messageLog->message)
-            ->andReturn(new BaileysResponse(
+            ->andReturn(new GatewayResponse(
                 success: true,
                 status: 'sent',
                 messageId: 'msg-123'
@@ -66,7 +66,7 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldNotReceive('sendMessage');
 
         $job = new SendMessageJob($messageLog);
@@ -93,7 +93,7 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->once()
             ->andThrow(new \Exception('Gateway error'));
@@ -125,7 +125,7 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->andThrow(new \Exception('Gateway error'));
 
@@ -179,7 +179,7 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->andThrow(new \Exception('Connection timeout'));
 
@@ -212,10 +212,10 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->once()
-            ->andReturn(new BaileysResponse(
+            ->andReturn(new GatewayResponse(
                 success: false,
                 status: 'failed',
                 errorMessage: 'Device not connected'
@@ -228,6 +228,70 @@ class SendMessageJobTest extends TestCase
 
         $messageLog->refresh();
         $this->assertEquals('retrying', $messageLog->status);
+    }
+
+    // Task 5.2: Tests using GatewayClientInterface
+
+    #[Test]
+    public function it_calls_gateway_client_interface_send_message_with_gateway_device_id(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create();
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+        ]);
+        $device = Device::factory()->create(['tenant_id' => $tenant->id]);
+        $messageLog = MessageLog::factory()->create([
+            'tenant_id' => $tenant->id,
+            'device_id' => $device->id,
+            'status' => 'pending',
+        ]);
+
+        $gatewayClient = $this->createMock(GatewayClientInterface::class);
+        $gatewayClient
+            ->expects($this->once())
+            ->method('sendMessage')
+            ->with($device->gateway_device_id, $messageLog->recipient, $messageLog->message)
+            ->willReturn(new GatewayResponse(success: true, status: 'sent', messageId: 'msg-456'));
+
+        $job = new SendMessageJob($messageLog);
+        $job->handle($gatewayClient);
+
+        $messageLog->refresh();
+        $this->assertEquals('sent', $messageLog->status);
+    }
+
+    #[Test]
+    public function it_updates_message_log_to_sent_when_gateway_response_is_successful(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $plan = Plan::factory()->create();
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+        ]);
+        $device = Device::factory()->create(['tenant_id' => $tenant->id]);
+        $messageLog = MessageLog::factory()->create([
+            'tenant_id' => $tenant->id,
+            'device_id' => $device->id,
+            'status' => 'pending',
+        ]);
+
+        $gatewayClient = $this->createMock(GatewayClientInterface::class);
+        $gatewayClient
+            ->expects($this->once())
+            ->method('sendMessage')
+            ->willReturn(new GatewayResponse(success: true, status: 'sent'));
+
+        $job = new SendMessageJob($messageLog);
+        $job->handle($gatewayClient);
+
+        $messageLog->refresh();
+        $this->assertEquals('sent', $messageLog->status);
+        $this->assertNotNull($messageLog->sent_at);
     }
 
     #[Test]
@@ -247,7 +311,7 @@ class SendMessageJobTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gatewayClient = $this->mock(BaileysGatewayClientInterface::class);
+        $gatewayClient = $this->mock(GatewayClientInterface::class);
         $gatewayClient->shouldReceive('sendMessage')
             ->andThrow(new \Exception('Gateway error'));
 
