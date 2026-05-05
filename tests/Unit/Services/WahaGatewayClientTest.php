@@ -186,17 +186,18 @@ class WahaGatewayClientTest extends TestCase
         $this->assertSame('qr-data==', $result);
     }
 
-    public function test_get_qr_code_throws_when_scan_qr_code_not_reached_after_5_polls(): void
+    public function test_get_qr_code_throws_when_scan_qr_code_not_reached_after_max_polls(): void
     {
+        // Build a sequence with enough STARTING responses to exhaust all 12 poll attempts
+        $sequence = Http::sequence();
+        for ($i = 0; $i < 12; $i++) {
+            $sequence->push(['status' => 'STARTING'], 200);
+        }
+
         Http::fake([
             'https://wa.konektivitas.com/api/sessions' => Http::response([], 201),
             'https://wa.konektivitas.com/api/sessions/session-1/start' => Http::response([], 200),
-            'https://wa.konektivitas.com/api/sessions/session-1' => Http::sequence()
-                ->push(['status' => 'STARTING'], 200)
-                ->push(['status' => 'STARTING'], 200)
-                ->push(['status' => 'STARTING'], 200)
-                ->push(['status' => 'STARTING'], 200)
-                ->push(['status' => 'STARTING'], 200),
+            'https://wa.konektivitas.com/api/sessions/session-1' => $sequence,
         ]);
 
         $this->expectException(GatewayException::class);

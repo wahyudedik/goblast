@@ -19,9 +19,9 @@ class WahaGatewayClient implements GatewayClientInterface
 
     private const RETRY_DELAYS_MS = [1000, 2000, 4000]; // exponential backoff in milliseconds
 
-    private const QR_POLL_MAX_ATTEMPTS = 5;
+    private const QR_POLL_MAX_ATTEMPTS = 12;
 
-    private const QR_POLL_INTERVAL_MS = 500;
+    private const QR_POLL_INTERVAL_MS = 2000;
 
     public function __construct(
         private string $baseUrl = '',
@@ -128,7 +128,7 @@ class WahaGatewayClient implements GatewayClientInterface
         ]);
 
         throw new GatewayException(
-            'Failed to send message after retries: '.($lastException?->getMessage() ?? 'Unknown error'),
+            'Failed to send message after retries: ' . ($lastException?->getMessage() ?? 'Unknown error'),
             $lastException?->getMessage(),
         );
     }
